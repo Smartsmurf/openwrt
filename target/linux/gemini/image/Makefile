@@ -72,8 +72,8 @@ ifeq ($(SUBTARGET),raidsonic)
 define Image/Build
 	$(call Image/Build/$(1),$(1))
 	dd if=$(BIN_DIR)/$(IMG_PREFIX)-$(1).img of=$(BIN_DIR)/rd.gz bs=6144k count=1
-#	dd if=/dev/zero of=$(BIN_DIR)/hddapp.tgz bs=6144k count=1
-	dd if=$(BIN_DIR)/$(IMG_PREFIX)-$(1).img of=$(BIN_DIR)/hddapp.tgz bs=6144k count=1 seek=1
+	touch $(BIN_DIR)/hddapp.tgz
+	dd if=$(BIN_DIR)/$(IMG_PREFIX)-$(1).img of=$(BIN_DIR)/hddapp.tgz bs=6144k count=1 skip=1
 	cp $(KDIR)/nas4220-zImage $(BIN_DIR)/$(IMG_PREFIX)-nas4220-zImage
 	cp $(BIN_DIR)/$(IMG_PREFIX)-nas4220-zImage $(BIN_DIR)/zImage
 	cp ./ImageInfo-ib4220 $(BIN_DIR)/ImageInfo

@@ -117,7 +117,7 @@ add_overlayfiles() {
 }
 
 # hooks
-sysupgrade_image_check="fwtool_check_image platform_check_image"
+sysupgrade_image_check="platform_check_image fwtool_check_image"
 sysupgrade_pre_upgrade="fwtool_pre_upgrade"
 
 if [ $SAVE_OVERLAY = 1 ]; then
