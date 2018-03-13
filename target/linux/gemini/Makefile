@@ -16,7 +16,7 @@ MAINTAINER:=Roman Yeryomin <roman@advem.lv>
 
 KERNEL_PATCHVER:=4.14
 
-KERNELNAME:=zImage
+KERNELNAME:=Image dtbs zImage
 
 include $(INCLUDE_DIR)/target.mk
 
