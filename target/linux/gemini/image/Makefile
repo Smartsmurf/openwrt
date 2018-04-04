@@ -23,7 +23,8 @@ define Image/Prepare
 # NAS4220: mach id 2038 (0x7F6)
 	echo -en "\x07\x1c\xa0\xe3\xf6\x10\x81\xe3" > $(KDIR)/nas4220-zImage
 	cat $(KDIR)/zImage >> $(KDIR)/nas4220-zImage
-	cat $(DTS_DIR)/gemini-nas4220b.dtb >> $(KDIR)/nas4220-zImage
+#	cat $(DTS_DIR)/gemini-nas4220b.dtb >> $(KDIR)/nas4220-zImage
+	cp $(DTS_DIR)/gemini-nas4220b.dtb $(BIN_DIR)/gemini-nas4220b.dtb
 endef
 endif
 

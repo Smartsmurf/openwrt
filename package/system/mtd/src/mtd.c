@@ -713,6 +713,9 @@ resume:
 		if (fis_remap(old_parts, n_old, new_parts, n_new) < 0)
 			fprintf(stderr, "Failed to update the FIS partition table\n");
 	}
+	else {
+		fis_update_len(mtd, w);
+	}
 #endif
 
 	close(fd);

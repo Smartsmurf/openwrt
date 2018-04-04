@@ -89,6 +89,23 @@ error:
 	return NULL;
 }
 
+static void
+fis_update_checksum(struct fis_image_desc *desc)
+{
+	unsigned int checksum;
+	int i;
+
+	/* Calculate checksum */
+	checksum = 0;
+	i=(char*)&desc->crc - (char*)&desc->hdr;
+	while (i > 0) {
+		--i;
+		checksum += ((char*)desc)[i];
+	}
+	desc->crc.desc = checksum;
+}
+
+
 int
 fis_validate(struct fis_part *old, int n_old, struct fis_part *new, int n_new)
 {
@@ -242,14 +259,14 @@ fis_remap(struct fis_part *old, int n_old, struct fis_part *new, int n_new)
 	for (part = new, desc = first; desc < first + n_new; desc++, part++) {
 		memset(desc, 0, sizeof(struct fis_image_desc));
 		memcpy(desc->hdr.name, part->name, sizeof(desc->hdr.name));
-		desc->crc.desc = 0;
-		desc->crc.file = 0;
 
 		desc->hdr.flash_base = offset;
 		desc->hdr.mem_base = part->loadaddr;
 		desc->hdr.entry_point = part->loadaddr;
 		desc->hdr.size = (part->size > 0) ? part->size : size;
 		desc->hdr.data_length = desc->hdr.size;
+		desc->crc.file = 0;
+		fis_update_checksum(desc);
 
 		offset += desc->hdr.size;
 		size -= desc->hdr.size;
@@ -259,4 +276,43 @@ fis_remap(struct fis_part *old, int n_old, struct fis_part *new, int n_new)
 	fis_close();
 
 	return 0;
+}
+
+struct fis_image_desc *
+fis_find_entry(struct fis_image_desc *fis, const char* mtd)
+{
+	char *end = (char*)fis + fis_erasesize;
+
+	while ((char*)fis < end &&
+		fis->hdr.name[0] != 0x00 && fis->hdr.name[0] != 0xff) {
+		if (!strcmp((char*)fis->hdr.name, mtd))
+			return fis;
+		fis++;
+	}
+
+	return NULL;
+}
+
+void
+fis_update_len(const char *mtd, ssize_t len)
+{
+	struct fis_image_desc *fis;
+
+	fis = fis_open();
+	if (!fis)
+		return;
+
+	fis = fis_find_entry(fis, mtd);
+	if (!fis)
+		goto done;
+
+	fprintf(stderr, "Updating data length in FIS table to 0x%08x\n", len);
+	fis->hdr.data_length = len;
+	if (fis->hdr.size < len)
+		fis->hdr.size = len;
+	fis_update_checksum(fis);
+	msync(fis_desc, fis_erasesize, MS_SYNC|MS_INVALIDATE);
+
+done:
+	fis_close();
 }

@@ -1,0 +1,24 @@
+--- a/drivers/net/ethernet/Kconfig
++++ b/drivers/net/ethernet/Kconfig
+@@ -34,7 +34,8 @@
+ source "drivers/net/ethernet/atheros/Kconfig"
+ source "drivers/net/ethernet/aurora/Kconfig"
+ source "drivers/net/ethernet/cadence/Kconfig"
++source "drivers/net/ethernet/cortina/Kconfig"
+ source "drivers/net/ethernet/adi/Kconfig"
+ source "drivers/net/ethernet/broadcom/Kconfig"
+ source "drivers/net/ethernet/brocade/Kconfig"
+ source "drivers/net/ethernet/calxeda/Kconfig"
+--- a/drivers/net/ethernet/Makefile
++++ b/drivers/net/ethernet/Makefile
+@@ -27,8 +27,9 @@
+ obj-$(CONFIG_NET_CALXEDA_XGMAC) += calxeda/
+ obj-$(CONFIG_NET_VENDOR_CAVIUM) += cavium/
+ obj-$(CONFIG_NET_VENDOR_CHELSIO) += chelsio/
+ obj-$(CONFIG_NET_VENDOR_CIRRUS) += cirrus/
+ obj-$(CONFIG_NET_VENDOR_CISCO) += cisco/
++obj-$(CONFIG_NET_VENDOR_CORTINA) += cortina/
+ obj-$(CONFIG_CX_ECAT) += ec_bhf.o
+ obj-$(CONFIG_DM9000) += davicom/
+ obj-$(CONFIG_DNET) += dnet.o
+
