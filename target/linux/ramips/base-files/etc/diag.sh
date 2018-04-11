@@ -41,6 +41,7 @@ get_status_led() {
 	tplink,c20-v4|\
 	tplink,c50-v3|\
 	tplink,tl-mr3420-v5|\
+	tplink,tl-wr902ac-v3|\
 	tl-wr840n-v4|\
 	tl-wr840n-v5|\
 	tl-wr841n-v13|\
@@ -93,6 +94,7 @@ get_status_led() {
 	dir-620-a1|\
 	dir-620-d1|\
 	dwr-512-b|\
+	dlink,dwr-116-a1|\
 	gb-pc1|\
 	gnubee,gb-pc2|\
 	hpm|\
@@ -105,6 +107,9 @@ get_status_led() {
 	wmr-300|\
 	zbt-wg2626)
 		status_led="$boardname:green:status"
+		;;
+	dlink,dwr-921-c1)
+		status_led="$boardname:green:sigstrength"
 		;;
 	asl26555-8M|\
 	asl26555-16M)
@@ -127,7 +132,8 @@ get_status_led() {
 		status_led="$boardname:yellow:status"
 		;;
 	cy-swr1100|\
-	w502u)
+	w502u|\
+	youhua,wr1200js)
 		status_led="$boardname:blue:wps"
 		;;
 	d240|\
@@ -147,7 +153,8 @@ get_status_led() {
 	wli-tx4-ag300n|\
 	y1|\
 	y1s|\
-	youku-yk1)
+	youku-yk1|\
+	zorlik,zl5900v2)
 		status_led="$boardname:blue:power"
 		;;
 	dlink,dap-1522-a1|\

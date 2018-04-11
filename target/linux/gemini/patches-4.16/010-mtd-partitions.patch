@@ -35,15 +35,6 @@
  extern void put_mtd_device(struct mtd_info *mtd);
 --- a/drivers/mtd/mtdpart.c
 +++ b/drivers/mtd/mtdpart.c
-@@ -28,7 +28,8 @@
- #include <linux/list.h>
- #include <linux/kmod.h>
- #include <linux/mtd/mtd.h>
- #include <linux/mtd/partitions.h>
-+#include <linux/magic.h>
- #include <linux/err.h>
- 
- #include "mtdcore.h"
 @@ -889,7 +889,7 @@
   * for reasons of data integrity.
   */

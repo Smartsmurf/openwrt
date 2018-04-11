@@ -30,6 +30,8 @@
 #include <linux/tcp.h>
 #include <linux/io.h>
 #include <linux/bug.h>
+#include <linux/netfilter.h>
+#include <net/netfilter/nf_flow_table.h>
 
 #include <asm/mach-ralink/ralink_regs.h>
 
@@ -108,6 +110,18 @@ void fe_reg_w32(u32 val, enum fe_reg reg)
 u32 fe_reg_r32(enum fe_reg reg)
 {
 	return fe_r32(fe_reg_table[reg]);
+}
+
+void fe_m32(struct fe_priv *eth, u32 clear, u32 set, unsigned reg)
+{
+	u32 val;
+
+	spin_lock(&eth->page_lock);
+	val = __raw_readl(fe_base + reg);
+	val &= ~clear;
+	val |= set;
+	__raw_writel(val, fe_base + reg);
+	spin_unlock(&eth->page_lock);
 }
 
 void fe_reset(u32 reset_bits)
@@ -865,11 +879,18 @@ static int fe_poll_rx(struct napi_struct *napi, int budget,
 			skb_checksum_none_assert(skb);
 		skb->protocol = eth_type_trans(skb, netdev);
 
-		stats->rx_packets++;
-		stats->rx_bytes += pktlen;
+#ifdef CONFIG_NET_MEDIATEK_OFFLOAD
+		if (mtk_offload_check_rx(priv, skb, trxd.rxd4) == 0) {
+#endif
+			stats->rx_packets++;
+			stats->rx_bytes += pktlen;
 
-		napi_gro_receive(napi, skb);
-
+			napi_gro_receive(napi, skb);
+#ifdef CONFIG_NET_MEDIATEK_OFFLOAD
+		} else {
+			dev_kfree_skb(skb);
+		}
+#endif
 		ring->rx_data[idx] = new_data;
 		rxd->rxd1 = (unsigned int)dma_addr;
 
@@ -1142,8 +1163,8 @@ static int fe_hw_init(struct net_device *dev)
 	struct fe_priv *priv = netdev_priv(dev);
 	int i, err;
 
-	err = devm_request_irq(priv->device, dev->irq, fe_handle_irq, 0,
-			       dev_name(priv->device), dev);
+	err = devm_request_irq(priv->dev, dev->irq, fe_handle_irq, 0,
+			       dev_name(priv->dev), dev);
 	if (err)
 		return err;
 
@@ -1207,6 +1228,9 @@ static int fe_open(struct net_device *dev)
 	napi_enable(&priv->rx_napi);
 	fe_int_enable(priv->soc->tx_int | priv->soc->rx_int);
 	netif_start_queue(dev);
+#ifdef CONFIG_NET_MEDIATEK_OFFLOAD
+	mtk_ppe_probe(priv);
+#endif
 
 	return 0;
 }
@@ -1243,6 +1267,10 @@ static int fe_stop(struct net_device *dev)
 
 	fe_free_dma(priv);
 
+#ifdef CONFIG_NET_MEDIATEK_OFFLOAD
+	mtk_ppe_remove(priv);
+#endif
+
 	return 0;
 }
 
@@ -1261,14 +1289,14 @@ static int __init fe_init(struct net_device *dev)
 			return -ENODEV;
 		}
 
-	mac_addr = of_get_mac_address(priv->device->of_node);
+	mac_addr = of_get_mac_address(priv->dev->of_node);
 	if (mac_addr)
 		ether_addr_copy(dev->dev_addr, mac_addr);
 
 	/* If the mac address is invalid, use random mac address  */
 	if (!is_valid_ether_addr(dev->dev_addr)) {
 		random_ether_addr(dev->dev_addr);
-		dev_err(priv->device, "generated random MAC address %pM\n",
+		dev_err(priv->dev, "generated random MAC address %pM\n",
 			dev->dev_addr);
 	}
 
@@ -1277,7 +1305,7 @@ static int __init fe_init(struct net_device *dev)
 		return err;
 
 	if (priv->soc->port_init)
-		for_each_child_of_node(priv->device->of_node, port)
+		for_each_child_of_node(priv->dev->of_node, port)
 			if (of_device_is_compatible(port, "mediatek,eth-port") &&
 			    of_device_is_available(port))
 				priv->soc->port_init(priv, port);
@@ -1390,6 +1418,23 @@ static int fe_change_mtu(struct net_device *dev, int new_mtu)
 	return fe_open(dev);
 }
 
+#ifdef CONFIG_NET_MEDIATEK_OFFLOAD
+static int
+fe_flow_offload(enum flow_offload_type type, struct flow_offload *flow,
+		struct flow_offload_hw_path *src,
+		struct flow_offload_hw_path *dest)
+{
+	struct fe_priv *priv;
+
+	if (src->dev != dest->dev)
+		return -EINVAL;
+
+	priv = netdev_priv(src->dev);
+
+	return mtk_flow_offload(priv, type, flow, src, dest);
+}
+#endif
+
 static const struct net_device_ops fe_netdev_ops = {
 	.ndo_init		= fe_init,
 	.ndo_uninit		= fe_uninit,
@@ -1406,6 +1451,9 @@ static const struct net_device_ops fe_netdev_ops = {
 	.ndo_vlan_rx_kill_vid	= fe_vlan_rx_kill_vid,
 #ifdef CONFIG_NET_POLL_CONTROLLER
 	.ndo_poll_controller	= fe_poll_controller,
+#endif
+#ifdef CONFIG_NET_MEDIATEK_OFFLOAD
+	.ndo_flow_offload	= fe_flow_offload,
 #endif
 };
 
@@ -1525,7 +1573,7 @@ static int fe_probe(struct platform_device *pdev)
 	}
 
 	priv->netdev = netdev;
-	priv->device = &pdev->dev;
+	priv->dev = &pdev->dev;
 	priv->soc = soc;
 	priv->msg_enable = netif_msg_init(fe_msg_level, FE_DEFAULT_MSG_ENABLE);
 	priv->rx_ring.frag_size = fe_max_frag_size(ETH_DATA_LEN);

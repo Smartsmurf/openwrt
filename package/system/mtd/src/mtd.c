@@ -476,6 +476,7 @@ mtd_write(int imagefd, const char *mtd, char *fis_layout, size_t part_offset)
 	int skip_bad_blocks = 0;
 
 #ifdef FIS_SUPPORT
+#ifndef FIS_CHANGE_DATA_SIZE_ONLY
 	static struct fis_part new_parts[MAX_ARGS];
 	static struct fis_part old_parts[MAX_ARGS];
 	int n_new = 0, n_old = 0;
@@ -528,6 +529,7 @@ next:
 		if (ret == 0)
 			fis_layout = NULL;
 	}
+#endif
 #endif
 
 	if (strchr(mtd, ':')) {
@@ -709,13 +711,18 @@ resume:
 		fprintf(stderr, "\n");
 
 #ifdef FIS_SUPPORT
+#ifndef FIS_CHANGE_DATA_SIZE_ONLY
 	if (fis_layout) {
 		if (fis_remap(old_parts, n_old, new_parts, n_new) < 0)
 			fprintf(stderr, "Failed to update the FIS partition table\n");
 	}
-	else {
+	else
+	{
+#endif
 		fis_update_len(mtd, w);
+#ifndef FIS_CHANGE_DATA_SIZE_ONLY
 	}
+#endif
 #endif
 
 	close(fd);
@@ -776,10 +783,12 @@ static void usage(void)
 	}
 	fprintf(stderr,
 #ifdef FIS_SUPPORT
+#ifndef FIS_CHANGE_DATA_SIZE_ONLY
 	"        -F <part>[:<size>[:<entrypoint>]][,<part>...]\n"
 	"                                alter the fis partition table to create new partitions replacing\n"
 	"                                the partitions provided as argument to the write command\n"
 	"                                (only valid together with the write command)\n"
+#endif
 #endif
 	"\n"
 	"Example: To write linux.trx to mtd4 labeled as linux and reboot afterwards\n"
@@ -829,7 +838,9 @@ int main (int argc, char **argv)
 
 	while ((ch = getopt(argc, argv,
 #ifdef FIS_SUPPORT
+#ifndef FIS_CHANGE_DATA_SIZE_ONLY
 			"F:"
+#endif
 #endif
 			"frnqe:d:s:j:p:o:c:l:")) != -1)
 		switch (ch) {
@@ -900,9 +911,11 @@ int main (int argc, char **argv)
 				}
 				break;
 #ifdef FIS_SUPPORT
+#ifndef FIS_CHANGE_DATA_SIZE_ONLY
 			case 'F':
 				fis_layout = optarg;
 				break;
+#endif
 #endif
 			case '?':
 			default:

@@ -32,9 +32,18 @@
 //#include <mach/global_reg.h>
 
 #include "ehci.h"
+/* includes were taken from u-boot project (include/usb) */
+#include "ehci-fotg2.h"
+#include "ehci-fusbh2.h"
+
 
 struct fotg2_ehci {
 	struct clk *clk;
+};
+
+union ehci_fotg2_regs {
+	struct fusbh200_regs usb;
+	struct fotg210_regs  otg;
 };
 
 #define to_fotg2_ehci(hcd)	(struct fotg2_ehci *)(hcd_to_ehci(hcd)->priv)
@@ -55,46 +64,10 @@ struct fotg2_ehci {
 
 #define GLOBAL_ICR			0xC4
 
-/* Device Control Register */
-#define DEV_CTRL_REG			0x100
-#define DEVCTRL_FS_FORCED   (1 << 9)  /* Forced to be Full-Speed Mode */
-#define DEVCTRL_HS          (1 << 6)  /* High Speed Mode */
-#define DEVCTRL_FS          (0 << 6)  /* Full Speed Mode */
-#define DEVCTRL_EN          (1 << 5)  /* Chip Enable */
-#define DEVCTRL_RESET       (1 << 4)  /* Chip Software Reset */
-#define DEVCTRL_SUSPEND     (1 << 3)  /* Enter Suspend Mode */
-#define DEVCTRL_GIRQ_EN     (1 << 2)  /* Global Interrupt Enabled */
-#define DEVCTRL_HALFSPD     (1 << 1)  /* Half speed mode for FPGA test */
-#define DEVCTRL_RWAKEUP (1 << 0) /* Enable remote wake-up */
-#define DEV_ADDR_REG			0x104	/* Device Address Register */
-#define DEV_IDLE_CTR_REG		0x124	/* IDLE Counter Register */
-
-
 #define GLOBAL_INT_POLARITY		(1 << 3)
 #define GLOBAL_INT_MASK_HC		(1 << 2)
 #define GLOBAL_INT_MASK_OTG		(1 << 1)
 #define GLOBAL_INT_MASK_DEV		(1 << 0)
-
-#define OTGC_SCR_ID			(1 << 21)
-#define OTGC_SCR_CROLE			(1 << 20)
-#define OTGC_SCR_VBUS_VLD		(1 << 19)
-#define OTGC_SCR_A_SRP_RESP_TYPE	(1 << 8)
-#define OTGC_SCR_A_SRP_DET_EN		(1 << 7)
-#define OTGC_SCR_A_SET_B_HNP_EN		(1 << 6)
-#define OTGC_SCR_A_BUS_DROP		(1 << 5)
-#define OTGC_SCR_A_BUS_REQ		(1 << 4)
-
-#define OTGC_INT_APLGRMV		(1 << 12)
-#define OTGC_INT_BPLGRMV		(1 << 11)
-#define OTGC_INT_OVC			(1 << 10)
-#define OTGC_INT_IDCHG			(1 << 9)
-#define OTGC_INT_RLCHG			(1 << 8)
-#define OTGC_INT_AVBUSERR		(1 << 5)
-#define OTGC_INT_ASRPDET		(1 << 4)
-#define OTGC_INT_BSRPDN			(1 << 0)
-
-#define OTGC_INT_A_TYPE		(OTGC_INT_ASRPDET|OTGC_INT_AVBUSERR|OTGC_INT_OVC|OTGC_INT_RLCHG|OTGC_INT_IDCHG|OTGC_INT_APLGRMV)
-#define OTGC_INT_B_TYPE		(OTGC_INT_AVBUSERR|OTGC_INT_OVC|OTGC_INT_RLCHG|OTGC_INT_IDCHG)
 
 MODULE_ALIAS("platform:" DRV_NAME);
 
@@ -102,7 +75,7 @@ MODULE_ALIAS("platform:" DRV_NAME);
  * Gemini-specific initialization function, only executed on the
  * Gemini SoC using the global misc control register.
  */
-#define GEMINI_GLOBAL_MISC_CTRL		0x30
+#define GEMINI_GLOBAL_SYSCON_MISC_CTRL	0x30
 #define GEMINI_MISC_USB0_WAKEUP		BIT(14)
 #define GEMINI_MISC_USB1_WAKEUP		BIT(15)
 #define GEMINI_MISC_USB0_VBUS_ON	BIT(22)
@@ -155,7 +128,7 @@ static int fotg210_gemini_init(struct device *dev, struct usb_hcd *hcd)
 
 	dev_info(dev, "initializing Gemini PHY @ 0x%x (val=0x%x, mask=0x%x)\n", hcd->rsrc_start, val, mask);
 
-	ret = regmap_update_bits(map, GEMINI_GLOBAL_MISC_CTRL, mask, val);
+	ret = regmap_update_bits(map, GEMINI_GLOBAL_SYSCON_MISC_CTRL, mask, val);
 	if (ret) {
 		dev_err(dev, "failed to initialize Gemini PHY\n");
 		return ret;
@@ -165,64 +138,70 @@ static int fotg210_gemini_init(struct device *dev, struct usb_hcd *hcd)
 	return 0;
 }
 
+static inline int ehci_is_fotg2xx(struct usb_hcd *hcd)
+{
+	union ehci_fotg2_regs *regs = hcd->regs;
+	return !ioread32(&regs->usb.easstr);
+}
+
 static void fotg2_otg_init(struct usb_hcd *hcd)
 {
 	u32 val;
+	union ehci_fotg2_regs *regs = hcd->regs;
 
-	/* (1) disable device mode, just in case... */
+	if (ehci_is_fotg2xx(hcd)) {
+		ehci_info(hcd_to_ehci(hcd),
+			"resetting fotg2xx\n");
 
-	/* chip enable */
-	iowrite32(DEVCTRL_EN, hcd->regs + DEV_CTRL_REG);
-
-	/* device address reset */
-	iowrite32(0, hcd->regs + DEV_ADDR_REG);
-
-	/* set idle counter to 7ms */
-	iowrite32(7, hcd->regs + DEV_IDLE_CTR_REG);
-
-	/* chip reset */
-	val = ioread32(hcd->regs + DEV_CTRL_REG);
-	val |= DEVCTRL_RESET;
-	iowrite32(val, hcd->regs + DEV_CTRL_REG);
-	msleep(10); 
-	if (ioread32(hcd->regs + DEV_CTRL_REG) & DEVCTRL_RESET) {
+		/* ... Power off A-device */
+		val = ioread32(&regs->otg.otgcsr);
+		val |= OTGCSR_A_BUSDROP;
+		iowrite32(val, &regs->otg.otgcsr);
+		/* ... Drop vbus and bus traffic */
+		val = ioread32(&regs->otg.otgcsr);
+		val &= ~OTGCSR_A_BUSREQ;
+		iowrite32(val, &regs->otg.otgcsr);
+		msleep(10);
+		/* ... Power on A-device */
+		val = ioread32(&regs->otg.otgcsr);
+		val &= ~OTGCSR_A_BUSDROP;
+		iowrite32(val, &regs->otg.otgcsr);
+		/* ... Drive vbus and bus traffic */
+		val = ioread32(&regs->otg.otgcsr);
+		val |= OTGCSR_A_BUSREQ;
+		iowrite32(val, &regs->otg.otgcsr);
+		msleep(10);
+	} else {
 		ehci_warn(hcd_to_ehci(hcd),
-			"fotg210: chip reset failed\n");
-	}	
-	/* suspend delay = 3 ms */
-	iowrite32(3, hcd->regs + DEV_IDLE_CTR_REG);
+			"device not in host mode\n");
 
-	/* (2) reset OTG */
-	/* ... Power off A-device */
-	val = ioread32(hcd->regs + OTGC_SCR);
-	val |= OTGC_SCR_A_BUS_DROP;
-	iowrite32(val, hcd->regs + OTGC_SCR);
-	/* ... Drop vbus and bus traffic */
-	val = ioread32(hcd->regs + OTGC_SCR);
-	val &= ~OTGC_SCR_A_BUS_REQ;
-	iowrite32(val, hcd->regs + OTGC_SCR);
-	msleep(10);
-	/* ... Power on A-device */
-	val = ioread32(hcd->regs + OTGC_SCR);
-	val &= ~OTGC_SCR_A_BUS_DROP;
-	iowrite32(val, hcd->regs + OTGC_SCR);
-	/* ... Drive vbus and bus traffic */
-	val = ioread32(hcd->regs + OTGC_SCR);
-	val |= OTGC_SCR_A_BUS_REQ;
-	iowrite32(val, hcd->regs + OTGC_SCR);
-	msleep(10);
-#if 0
+		/* chip enable */
+		//iowrite32(DEVCTRL_EN, hcd->regs + DEV_CTRL_REG);
 
-	/* Clear all interrupt status */
-//	iowrite32(ISR_HOST | ISR_OTG | ISR_DEV, hcd->regs + GLOBAL_ISR);
+		/* device address reset */
+		//iowrite32(0, hcd->regs + DEV_ADDR_REG);
 
-	/* Disable OTG & DEV interrupts, triggered at level-high */
-//	iowrite32(GLOBAL_INT_POLARITY | GLOBAL_INT_MASK_OTG | GLOBAL_INT_MASK_DEV,
+		/* set idle counter to 7ms */
+		//iowrite32(7, hcd->regs + DEV_IDLE_CTR_REG);
+
+		/* chip reset */
+		//val = ioread32(hcd->regs + DEV_CTRL_REG);
+		//val |= DEVCTRL_RESET;
+		//iowrite32(val, hcd->regs + DEV_CTRL_REG);
+		//msleep(10); 
+		//if (ioread32(hcd->regs + DEV_CTRL_REG) & DEVCTRL_RESET) {
+		//	ehci_warn(hcd_to_ehci(hcd),
+		//		"fotg210: chip reset failed\n");
+		//}	
+		/* suspend delay = 3 ms */
+		//iowrite32(3, hcd->regs + DEV_IDLE_CTR_REG);
+	}
+
+//#if 0
+
+//	iowrite32(GLOBAL_INT_POLARITY | GLOBAL_INT_MASK_HC |
+//	       GLOBAL_INT_MASK_OTG | GLOBAL_INT_MASK_DEV,
 //		hcd->regs + GLOBAL_ICR);
-
-	iowrite32(GLOBAL_INT_POLARITY | GLOBAL_INT_MASK_HC |
-	       GLOBAL_INT_MASK_OTG | GLOBAL_INT_MASK_DEV,
-		hcd->regs + GLOBAL_ICR);
 
 //	val = ioread32(hcd->regs + OTGC_SCR);
 //	val &= ~(OTGC_SCR_A_SRP_RESP_TYPE | OTGC_SCR_A_SRP_DET_EN |
@@ -230,36 +209,47 @@ static void fotg2_otg_init(struct usb_hcd *hcd)
 //	val |= OTGC_SCR_A_BUS_REQ;
 //	iowrite32(val, hcd->regs + OTGC_SCR);
 
-	iowrite32(OTGC_INT_A_TYPE, hcd->regs + OTGC_INT_EN);
-#else
+//	iowrite32(OTGC_INT_A_TYPE, hcd->regs + OTGC_INT_EN);
+//#else
 	
-	iowrite32(GLOBAL_INT_POLARITY | GLOBAL_INT_MASK_HC |
-	       GLOBAL_INT_MASK_OTG | GLOBAL_INT_MASK_DEV,
-		hcd->regs + GLOBAL_ICR);
+//	iowrite32(GLOBAL_INT_POLARITY | GLOBAL_INT_MASK_HC |
+//	       GLOBAL_INT_MASK_OTG | GLOBAL_INT_MASK_DEV,
+//		hcd->regs + GLOBAL_ICR);
 
-	val = ioread32(hcd->regs + OTGC_SCR);
-	val &= ~(OTGC_SCR_A_SRP_RESP_TYPE | OTGC_SCR_A_SRP_DET_EN |
-		 OTGC_SCR_A_BUS_DROP      | OTGC_SCR_A_SET_B_HNP_EN);
-	val |= OTGC_SCR_A_BUS_REQ;
-	iowrite32(val, hcd->regs + OTGC_SCR);
+//	val = ioread32(hcd->regs + OTGC_SCR);
+//	val &= ~(OTGC_SCR_A_SRP_RESP_TYPE | OTGC_SCR_A_SRP_DET_EN |
+//		 OTGC_SCR_A_BUS_DROP      | OTGC_SCR_A_SET_B_HNP_EN);
+//	val |= OTGC_SCR_A_BUS_REQ;
+//	iowrite32(val, hcd->regs + OTGC_SCR);
 
-	iowrite32(OTGC_INT_A_TYPE, hcd->regs + OTGC_INT_EN);
+//	iowrite32(OTGC_INT_A_TYPE, hcd->regs + OTGC_INT_EN);
 	
 
-#endif
+//#endif
+	/* Disable HOST, OTG & DEV interrupts, triggered at level-high */
+	iowrite32(IMR_IRQLH | ISR_HOST | IMR_OTG | IMR_DEV, &regs->otg.imr);
+	/* Clear all interrupt status */
+	iowrite32(ISR_HOST | ISR_OTG | ISR_DEV, &regs->otg.isr);
+	/* enable Mini-A and A-device IRQ */
+	iowrite32(OTGIER_ASRP | OTGIER_AVBUSERR | OTGIER_OVD |
+		  OTGIER_RLCHG | OTGIER_IDCHG | OTGIER_APRM, &regs->otg.otgier);
+
 	/* setup MISC register, fixes timing problems */
-	val = ioread32(hcd->regs + HCD_MISC);
+	val = ioread32(&regs->otg.miscr);
 	val |= 0xD;
-	iowrite32(val, hcd->regs + HCD_MISC);
+	iowrite32(val, &regs->otg.miscr);
 
-	iowrite32(~0, hcd->regs + GLOBAL_ISR);
-	iowrite32(~0, hcd->regs + OTGC_INT_STS);
+//	iowrite32(~0, hcd->regs + GLOBAL_ISR);
+//	iowrite32(~0, hcd->regs + OTGC_INT_STS);
 
 }
 
 static int fotg2_ehci_reset(struct usb_hcd *hcd)
 {
 	int retval;
+
+	ehci_info(hcd_to_ehci(hcd),
+			"fotg2_ehci_reset called\n");
 
 	retval = ehci_setup(hcd);
 	if (retval)
@@ -288,10 +278,6 @@ static irqreturn_t fotg2_ehci_irq(int irq, void *data)
 	
 	retval = IRQ_NONE;
 
-/*	ehci_warn(hcd_to_ehci(hcd),
-			"Received irq. icr = %x\n", icr);
-*/
-	
 	sts = ~icr;
 	sts &= GLOBAL_INT_MASK_HC | GLOBAL_INT_MASK_OTG | GLOBAL_INT_MASK_DEV;
 	sts &= ioread32(hcd->regs + GLOBAL_ISR);
@@ -343,17 +329,10 @@ static int fotg2_ehci_probe(struct platform_device *pdev)
 	}
 	irq = res->start;
 
-//	irq = platform_get_irq(pdev, 0);
-//	if (irq < 0) {
-//		pr_err("no irq provided");
-//		return irq;
-//	}
-
 	/* Right now device-tree probed devices don't get dma_mask set.
 	 * Since shared usb code relies on it, set it here for now.
 	 * Once we have dma capability bindings this can go away.
 	 */
-
 	err = dma_coerce_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
 	if (err)
 		return -ENXIO;

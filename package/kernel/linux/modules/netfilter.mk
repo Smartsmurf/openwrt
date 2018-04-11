@@ -149,8 +149,9 @@ define KernelPackage/nf-flow
 	CONFIG_NF_FLOW_TABLE_HW
   DEPENDS:=+kmod-nf-conntrack @!LINUX_3_18 @!LINUX_4_4 @!LINUX_4_9
   FILES:= \
-	$(LINUX_DIR)/net/netfilter/nf_flow_table.ko
-  AUTOLOAD:=$(call AutoProbe,nf_flow_table)
+	$(LINUX_DIR)/net/netfilter/nf_flow_table.ko \
+	$(LINUX_DIR)/net/netfilter/nf_flow_table_hw.ko
+  AUTOLOAD:=$(call AutoProbe,nf_flow_table nf_flow_table_hw)
 endef
 
 $(eval $(call KernelPackage,nf-flow))
@@ -685,7 +686,7 @@ define KernelPackage/ipt-extra
   KCONFIG:=$(KCONFIG_IPT_EXTRA)
   FILES:=$(foreach mod,$(IPT_EXTRA-m),$(LINUX_DIR)/net/$(mod).ko)
   AUTOLOAD:=$(call AutoProbe,$(notdir $(IPT_EXTRA-m)))
-  $(call AddDepends/ipt,+kmod-br-netfilter)
+  $(call AddDepends/ipt)
 endef
 
 define KernelPackage/ipt-extra/description
@@ -693,12 +694,26 @@ define KernelPackage/ipt-extra/description
  Includes:
  - addrtype
  - owner
- - physdev (if bridge support was enabled in kernel)
  - pkttype
  - quota
 endef
 
 $(eval $(call KernelPackage,ipt-extra))
+
+
+define KernelPackage/ipt-physdev
+  TITLE:=physdev module
+  KCONFIG:=$(KCONFIG_IPT_PHYSDEV)
+  FILES:=$(foreach mod,$(IPT_PHYSDEV-m),$(LINUX_DIR)/net/$(mod).ko)
+  AUTOLOAD:=$(call AutoProbe,$(notdir $(IPT_PHYSDEV-m)))
+  $(call AddDepends/ipt,+kmod-br-netfilter)
+endef
+
+define KernelPackage/ipt-physdev/description
+ The iptables physdev kernel module
+endef
+
+$(eval $(call KernelPackage,ipt-physdev))
 
 
 define KernelPackage/ip6tables
@@ -753,7 +768,6 @@ $(eval $(call KernelPackage,arptables))
 define KernelPackage/br-netfilter
   SUBMENU:=$(NF_MENU)
   TITLE:=Bridge netfilter support modules
-  HIDDEN:=1
   DEPENDS:=+kmod-ipt-core
   FILES:=$(LINUX_DIR)/net/bridge/br_netfilter.ko
   KCONFIG:=CONFIG_BRIDGE_NETFILTER
@@ -766,7 +780,7 @@ $(eval $(call KernelPackage,br-netfilter))
 define KernelPackage/ebtables
   SUBMENU:=$(NF_MENU)
   TITLE:=Bridge firewalling modules
-  DEPENDS:=+kmod-ipt-core +kmod-br-netfilter
+  DEPENDS:=+kmod-ipt-core
   FILES:=$(foreach mod,$(EBTABLES-m),$(LINUX_DIR)/net/$(mod).ko)
   KCONFIG:=$(KCONFIG_EBTABLES)
   AUTOLOAD:=$(call AutoProbe,$(notdir $(EBTABLES-m)))
@@ -783,7 +797,7 @@ $(eval $(call KernelPackage,ebtables))
 
 define AddDepends/ebtables
   SUBMENU:=$(NF_MENU)
-  DEPENDS+=kmod-ebtables $(1)
+  DEPENDS+= +kmod-ebtables $(1)
 endef
 
 

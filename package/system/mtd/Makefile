@@ -41,6 +41,11 @@ ifdef CONFIG_MTD_REDBOOT_PARTS
   TARGET_CFLAGS += -DFIS_SUPPORT=1
 endif
 
+ifdef CONFIG_TARGET_gemini_raidsonic
+  MAKE_FLAGS += FIS_SUPPORT=1
+  TARGET_CFLAGS += -DFIS_SUPPORT=1 -DFIS_CHANGE_DATA_SIZE_ONLY=1
+endif
+
 define Package/mtd/install
 	$(INSTALL_DIR) $(1)/sbin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/mtd $(1)/sbin/

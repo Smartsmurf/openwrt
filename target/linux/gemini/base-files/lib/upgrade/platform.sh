@@ -33,7 +33,6 @@ platform_do_upgrade() {
 	[ -f "$CONF_TAR" -a "$SAVE_CONFIG" -eq 1 ] && append="-j $CONF_TAR"
 
 	mtd -q write /tmp/zImage Kern
-	mtd refresh rootfs $mode
 	mtd -q -r $append write /tmp/rootfs rootfs
 }
 
