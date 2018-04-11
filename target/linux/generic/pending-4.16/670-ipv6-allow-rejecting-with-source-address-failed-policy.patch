@@ -200,7 +200,7 @@ Signed-off-by: Jonas Gorski <jogo@openwrt.org>
  		net->ipv6.ip6_blk_hole_entry->dst.dev = dev;
  		net->ipv6.ip6_blk_hole_entry->rt6i_idev = in6_dev_get(dev);
  #endif
-@@ -4032,6 +4071,17 @@ static int __net_init ip6_route_net_init
+@@ -4032,6 +4071,15 @@ static int __net_init ip6_route_net_init
  	net->ipv6.ip6_blk_hole_entry->dst.ops = &net->ipv6.ip6_dst_ops;
  	dst_init_metrics(&net->ipv6.ip6_blk_hole_entry->dst,
  			 ip6_template_metrics, true);
@@ -210,8 +210,6 @@ Signed-off-by: Jonas Gorski <jogo@openwrt.org>
 +			sizeof(*net->ipv6.ip6_policy_failed_entry), GFP_KERNEL);
 +	if (!net->ipv6.ip6_policy_failed_entry)
 +		goto out_ip6_blk_hole_entry;
-+	net->ipv6.ip6_policy_failed_entry->dst.path =
-+		(struct dst_entry *)net->ipv6.ip6_policy_failed_entry;
 +	net->ipv6.ip6_policy_failed_entry->dst.ops = &net->ipv6.ip6_dst_ops;
 +	dst_init_metrics(&net->ipv6.ip6_policy_failed_entry->dst,
 +			 ip6_template_metrics, true);

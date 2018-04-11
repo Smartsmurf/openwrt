@@ -1,6 +1,6 @@
 --- a/arch/arm/boot/dts/gemini.dtsi	2018-04-01 23:20:27.000000000 +0200
 +++ b/arch/arm/boot/dts/gemini.dtsi	2018-03-31 11:46:37.668838000 +0200
-@@ -397,6 +397,29 @@
+@@ -397,6 +397,33 @@
  			#dma-cells = <2>;
  		};
  
@@ -12,6 +12,8 @@
 +			resets = <&syscon GEMINI_RESET_USB0>;
 +			clocks = <&syscon GEMINI_CLK_GATE_USB0>;
 +			clock-names = "PCLK";
++			pinctrl-names = "default";
++			pinctrl-0 = <&usb_default_pins>;
 +			syscon = <&syscon>;
 +			status = "disabled";
 +		};
@@ -23,6 +25,8 @@
 +			resets = <&syscon GEMINI_RESET_USB1>;
 +			clocks = <&syscon GEMINI_CLK_GATE_USB1>;
 +			clock-names = "PCLK";
++			pinctrl-names = "default";
++			pinctrl-0 = <&usb_default_pins>;
 +			syscon = <&syscon>;
 +			status = "disabled";
 +		};
