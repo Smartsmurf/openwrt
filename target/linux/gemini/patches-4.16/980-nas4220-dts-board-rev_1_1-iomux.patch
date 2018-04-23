@@ -5,7 +5,7 @@
  
  		sata: sata@46000000 {
 -			cortina,gemini-ata-muxmode = <0>;
-+			cortina,gemini-ata-muxmode = <1>;
++			cortina,gemini-ata-muxmode = <0>;
  			cortina,gemini-enable-sata-bridge;
  			status = "okay";
  		};

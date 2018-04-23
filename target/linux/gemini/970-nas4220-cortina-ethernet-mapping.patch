@@ -1,0 +1,109 @@
+--- a/drivers/net/ethernet/cortina/gemini.c
++++ b/drivers/net/ethernet/cortina/gemini.c
+@@ -587,6 +587,7 @@
+ 	if (c == r)
+ 		return;
+ 
++	rmb();
+ 	while (c != r) {
+ 		txd = txq->ring + c;
+ 		word0 = txd->word0;
+@@ -689,33 +690,6 @@
+ 	return 0;
+ }
+ 
+-static struct gmac_queue_page *
+-gmac_get_queue_page(struct gemini_ethernet *geth,
+-		    struct gemini_ethernet_port *port,
+-		    dma_addr_t addr)
+-{
+-	struct gmac_queue_page *gpage;
+-	dma_addr_t mapping;
+-	int i;
+-
+-	/* Only look for even pages */
+-	mapping = addr & PAGE_MASK;
+-
+-	if (!geth->freeq_pages) {
+-		dev_err(geth->dev, "try to get page with no page list\n");
+-		return NULL;
+-	}
+-
+-	/* Look up a ring buffer page from virtual mapping */
+-	for (i = 0; i < geth->num_freeq_pages; i++) {
+-		gpage = &geth->freeq_pages[i];
+-		if (gpage->mapping == mapping)
+-			return gpage;
+-	}
+-
+-	return NULL;
+-}
+-
+ static void gmac_cleanup_rxq(struct net_device *netdev)
+ {
+ 	struct gemini_ethernet_port *port = netdev_priv(netdev);
+@@ -725,6 +699,7 @@
+ 	struct nontoe_qhdr __iomem *qhdr;
+ 	void __iomem *dma_reg;
+ 	void __iomem *ptr_reg;
++	struct page *page;
+ 	dma_addr_t mapping;
+ 	union dma_rwptr rw;
+ 	unsigned int r, w;
+@@ -741,6 +716,7 @@
+ 
+ 	writel(0, dma_reg);
+ 
++	rmb();
+ 	/* Loop from read pointer to write pointer of the RX queue
+ 	 * and free up all pages by the queue.
+ 	 */
+@@ -752,14 +728,9 @@
+ 		if (!mapping)
+ 			continue;
+ 
+-		/* Freeq pointers are one page off */
+-		gpage = gmac_get_queue_page(geth, port, mapping + PAGE_SIZE);
+-		if (!gpage) {
+-			dev_err(geth->dev, "could not find page\n");
+-			continue;
+-		}
+ 		/* Release the RX queue reference to the page */
+-		put_page(gpage->page);
++		page = pfn_to_page(dma_to_pfn(geth->dev, mapping));
++		put_page(page);
+ 	}
+ 
+ 	dma_free_coherent(geth->dev, sizeof(*port->rxq_ring) << port->rxq_order,
+@@ -784,7 +755,7 @@
+ 
+ 	mapping = dma_map_single(geth->dev, page_address(page),
+ 				 PAGE_SIZE, DMA_FROM_DEVICE);
+-	if (dma_mapping_error(geth->dev, mapping)) {
++	if (dma_mapping_error(geth->dev, mapping) || !mapping) {
+ 		put_page(page);
+ 		return NULL;
+ 	}
+@@ -881,6 +852,7 @@
+ 		pn &= m_pn;
+ 	}
+ 
++	wmb();
+ 	writew(pn << fpp_order, geth->base + GLOBAL_SWFQ_RWPTR_REG + 2);
+ 
+ 	spin_unlock_irqrestore(&geth->freeq_lock, flags);
+@@ -1404,13 +1376,7 @@
+ 			goto err_drop;
+ 		}
+ 
+-		/* Freeq pointers are one page off */
+-		gpage = gmac_get_queue_page(geth, port, mapping + PAGE_SIZE);
+-		if (!gpage) {
+-			dev_err(geth->dev, "could not find mapping\n");
+-			continue;
+-		}
+-		page = gpage->page;
++		page = pfn_to_page(dma_to_pfn(geth->dev, mapping));
+ 
+ 		if (word3.bits32 & SOF_BIT) {
+ 			if (skb) {
