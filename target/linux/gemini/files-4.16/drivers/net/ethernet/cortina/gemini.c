@@ -845,11 +845,12 @@ static unsigned int geth_fill_freeq(struct gemini_ethernet *geth, bool refill)
 			struct gmac_rxdesc *freeq_entry;
 			dma_addr_t mapping;
 
+			/* First allocate and DMA map a single page */
 			page = alloc_page( GFP_ATOMIC);
 			if (!page)
 				break;
 
-			mapping = dma_map_page(geth->dev, page, 0, PAGE_SIZE,
+			mapping = dma_map_single(geth->dev, page_address(page), PAGE_SIZE,
 					   DMA_FROM_DEVICE);
 
 			if (dma_mapping_error(geth->dev, mapping) || !mapping) {
@@ -857,6 +858,12 @@ static unsigned int geth_fill_freeq(struct gemini_ethernet *geth, bool refill)
 				break;
 			}
 
+			/* The assign the page mapping (physical address) to the buffer address
+			 * in the hardware queue. PAGE_SHIFT on ARM is 12 (1 page is 4096 bytes,
+			 * 4k), and the default RX frag order is 11 (fragments are up 20 2048
+			 * bytes, 2k) so fpp_order (fragments per page order) is default 1. Thus
+			 * each page normally needs two entries in the queue.
+			 */
 			freeq_entry = geth->freeq_ring + (pn << fpp_order);
 			for (i = 1 << fpp_order; i > 0; --i) {
 				freeq_entry->word2.buf_adr = mapping;
@@ -864,7 +871,17 @@ static unsigned int geth_fill_freeq(struct gemini_ethernet *geth, bool refill)
 				mapping += frag_len;
 			}
 
+			/* If the freeq entry already has a page mapped, then unmap it. */
+			if (geth->freeq_pages[pn]) {
+				mapping = geth->freeq_ring[pn << fpp_order].word2.buf_adr;
+				dma_unmap_single(geth->dev, mapping, frag_len, DMA_FROM_DEVICE);
+				/* This should be the last reference to the page so it gets
+				 * released
+				 */
+				put_page(geth->freeq_pages[pn]);
+			}
 
+			/* Then put our new mapping into the page table */
 			geth->freeq_pages[pn] = page;
 
 		}
@@ -885,10 +902,6 @@ static unsigned int geth_fill_freeq(struct gemini_ethernet *geth, bool refill)
 				break;
 
 			geth->freeq_replaced++;
-
-//			page = geth_freeq_alloc_map_page(geth, pn);
-//			if (!page)
-//				break;
 
 			/* Unmap and release page */
 			mapping = geth->freeq_ring[pn << fpp_order].word2.buf_adr;
@@ -963,19 +976,14 @@ static int geth_setup_freeq(struct gemini_ethernet *geth)
 	return 0;
 
 err_freeq_alloc:
-//	while (pn > 0) {
-//		struct gmac_queue_page *gpage;
-//		dma_addr_t mapping;
+	while (pn > 0) {
+		dma_addr_t mapping;
 
-//		--pn;
-//		mapping = geth->freeq_ring[pn << fpp_order].word2.buf_adr;
-//		dma_unmap_single(geth->dev, mapping, frag_len, DMA_FROM_DEVICE);
-//		gpage = &geth->freeq_pages[pn];
-//		put_page(gpage->page);
-//		put_page(geth->freeq_pages[pn]);
-//	}
-
-//	kfree(geth->freeq_pages);
+		--pn;
+		mapping = geth->freeq_ring[pn << fpp_order].word2.buf_adr;
+		dma_unmap_single(geth->dev, mapping, frag_len, DMA_FROM_DEVICE);
+		put_page(geth->freeq_pages[pn]);
+	}
 err_freeq:
 	dma_free_coherent(geth->dev,
 			  sizeof(*geth->freeq_ring) << geth->freeq_order,
@@ -991,7 +999,7 @@ err_freeq:
 static void geth_cleanup_freeq(struct gemini_ethernet *geth)
 {
 	unsigned int fpp_order = PAGE_SHIFT - geth->freeq_frag_order;
-//	unsigned int frag_len = 1 << geth->freeq_frag_order;
+	unsigned int frag_len = 1 << geth->freeq_frag_order;
 	unsigned int len = 1 << geth->freeq_order;
 	unsigned int pages = len >> fpp_order;
 	struct page *page;
@@ -1007,8 +1015,7 @@ static void geth_cleanup_freeq(struct gemini_ethernet *geth)
 		page = geth->freeq_pages[pn];
 
 		mapping = geth->freeq_ring[pn << fpp_order].word2.buf_adr;
-//		dma_unmap_single(geth->dev, mapping, frag_len, DMA_FROM_DEVICE);
-		dma_unmap_single(geth->dev, mapping, PAGE_SIZE, DMA_FROM_DEVICE);
+		dma_unmap_single(geth->dev, mapping, frag_len, DMA_FROM_DEVICE);
 
 //		gpage = &geth->freeq_pages[pn];
 //		while (page_ref_count(gpage->page) > 0)
