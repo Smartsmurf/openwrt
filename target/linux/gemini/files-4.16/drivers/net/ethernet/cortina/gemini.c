@@ -44,7 +44,7 @@
 #include "gemini.h"
 
 #define DRV_NAME		"gmac-gemini"
-#define DRV_VERSION		"1.0"
+#define DRV_VERSION		"1.1"
 
 #define HSIZE_8			0x00
 #define HSIZE_16		0x01
@@ -159,11 +159,12 @@ struct gemini_ethernet {
 //	unsigned int	num_freeq_pages;
 	spinlock_t	freeq_lock; /* Locks queue from reentrance */
 	u64		freeq_replaced;
+	u64		freeq_lost;
 };
 
 #define GMAC_STATS_NUM	( \
 	RX_STATS_NUM + RX_STATUS_NUM + RX_CHKSUM_NUM + 1 + \
-	TX_MAX_FRAGS + 3)
+	TX_MAX_FRAGS + 4)
 
 static const char gmac_stats_strings[GMAC_STATS_NUM][ETH_GSTRING_LEN] = {
 	"GMAC_IN_DISCARDS",
@@ -216,6 +217,7 @@ static const char gmac_stats_strings[GMAC_STATS_NUM][ETH_GSTRING_LEN] = {
 	"TX_FRAGS_LINEARIZED",
 	"TX_HW_CSUMMED",
 	"FREEQ_REPLACED",
+	"FREEQ_LOST",
 };
 
 static void gmac_dump_dma_state(struct net_device *netdev);
@@ -531,7 +533,8 @@ static int gmac_setup_txqs(struct net_device *netdev)
 
 	rwptr_reg = port->dma_base + GMAC_SW_TX_QUEUE0_PTR_REG;
 
-	skb_tab = kcalloc(len, sizeof(*skb_tab), GFP_KERNEL);
+//	skb_tab = kcalloc(len, sizeof(*skb_tab), GFP_KERNEL);
+	skb_tab = kzalloc(len * sizeof(*skb_tab), GFP_KERNEL);
 	if (!skb_tab)
 		return -ENOMEM;
 
@@ -592,7 +595,7 @@ static void gmac_clean_txq(struct net_device *netdev, struct gmac_txq *txq,
 	if (c == r)
 		return;
 
-	rmb();
+	dma_rmb();
 	while (c != r) {
 		txd = txq->ring + c;
 		word0 = txd->word0;
@@ -708,11 +711,13 @@ static void gmac_cleanup_rxq(struct net_device *netdev)
 	dma_addr_t mapping;
 	union dma_rwptr rw;
 	unsigned int r, w;
+	unsigned int m;
 
 	qhdr = geth->base +
 		TOE_DEFAULT_Q_HDR_BASE(netdev->dev_id);
 	dma_reg = &qhdr->word0;
 	ptr_reg = &qhdr->word1;
+	m = (1 <<port->rxq_order) - 1;
 
 	rw.bits32 = readl(ptr_reg);
 	r = rw.bits.rptr;
@@ -721,14 +726,14 @@ static void gmac_cleanup_rxq(struct net_device *netdev)
 
 	writel(0, dma_reg);
 
-	rmb();
+	dma_rmb();
 	/* Loop from read pointer to write pointer of the RX queue
 	 * and free up all pages by the queue.
 	 */
 	while (r != w) {
 		mapping = rxd[r].word2.buf_adr;
 		r++;
-		r &= ((1 << port->rxq_order) - 1);
+		r &= m;
 
 		if (!mapping)
 			continue;
@@ -742,12 +747,10 @@ static void gmac_cleanup_rxq(struct net_device *netdev)
 			  port->rxq_ring, port->rxq_dma_base);
 }
 
-#if 0
 static struct page *geth_freeq_alloc_map_page(struct gemini_ethernet *geth,
 					      int pn)
 {
 	struct gmac_rxdesc *freeq_entry;
-//	struct gmac_queue_page *gpage;
 	unsigned int fpp_order;
 	unsigned int frag_len;
 	dma_addr_t mapping;
@@ -784,25 +787,22 @@ static struct page *geth_freeq_alloc_map_page(struct gemini_ethernet *geth,
 	}
 
 	/* If the freeq entry already has a page mapped, then unmap it. */
-	gpage = &geth->freeq_pages[pn];
-	if (gpage->page) {
+	if (geth->freeq_pages[pn]) {
 		mapping = geth->freeq_ring[pn << fpp_order].word2.buf_adr;
 		dma_unmap_single(geth->dev, mapping, frag_len, DMA_FROM_DEVICE);
 		/* This should be the last reference to the page so it gets
 		 * released
 		 */
-		put_page(gpage->page);
+		put_page(geth->freeq_pages[pn]);
 	}
 
 	/* Then put our new mapping into the page table */
 	dev_dbg(geth->dev, "page %d, DMA addr: %08x, page %p\n",
 		pn, (unsigned int)mapping, page);
-	gpage->mapping = mapping;
-	gpage->page = page;
 
+	geth->freeq_pages[pn] = page;
 	return page;
 }
-#endif
 
 /**
  * geth_fill_freeq() - Fill the freeq with empty fragments to use
@@ -814,13 +814,14 @@ static struct page *geth_freeq_alloc_map_page(struct gemini_ethernet *geth,
 static unsigned int geth_fill_freeq(struct gemini_ethernet *geth, bool refill)
 {
 	unsigned int fpp_order = PAGE_SHIFT - geth->freeq_frag_order;
-	unsigned int frag_len = 1 << geth->freeq_frag_order;
+//	unsigned int frag_len = 1 << geth->freeq_frag_order;
 	unsigned int count = 0;
 	unsigned int pn, epn;
 	unsigned long flags;
 	union dma_rwptr rw;
 	unsigned int m_pn;
-	int i;
+	struct page *page;
+//	int i;
 
 	/* Mask for page */
 	m_pn = (1 << (geth->freeq_order - fpp_order)) - 1;
@@ -834,81 +835,30 @@ static unsigned int geth_fill_freeq(struct gemini_ethernet *geth, bool refill)
 
 	/* Loop over the freeq ring buffer entries */
 	while (pn != epn) {
-//		struct gmac_queue_page *gpage;
-		struct page *page;
 
-//		gpage = &geth->freeq_pages[pn];
-//		page = gpage->page;
 		page = geth->freeq_pages[pn];
-
-		if (!page) {
-			struct gmac_rxdesc *freeq_entry;
-			dma_addr_t mapping;
-
-			/* First allocate and DMA map a single page */
-			page = alloc_page( GFP_ATOMIC);
-			if (!page)
-				break;
-
-			mapping = dma_map_single(geth->dev, page_address(page), PAGE_SIZE,
-					   DMA_FROM_DEVICE);
-
-			if (dma_mapping_error(geth->dev, mapping) || !mapping) {
-				put_page(page);
-				break;
-			}
-
-			/* The assign the page mapping (physical address) to the buffer address
-			 * in the hardware queue. PAGE_SHIFT on ARM is 12 (1 page is 4096 bytes,
-			 * 4k), and the default RX frag order is 11 (fragments are up 20 2048
-			 * bytes, 2k) so fpp_order (fragments per page order) is default 1. Thus
-			 * each page normally needs two entries in the queue.
-			 */
-			freeq_entry = geth->freeq_ring + (pn << fpp_order);
-			for (i = 1 << fpp_order; i > 0; --i) {
-				freeq_entry->word2.buf_adr = mapping;
-				freeq_entry++;
-				mapping += frag_len;
-			}
-
-			/* If the freeq entry already has a page mapped, then unmap it. */
-			if (geth->freeq_pages[pn]) {
-				mapping = geth->freeq_ring[pn << fpp_order].word2.buf_adr;
-				dma_unmap_single(geth->dev, mapping, frag_len, DMA_FROM_DEVICE);
-				/* This should be the last reference to the page so it gets
-				 * released
-				 */
-				put_page(geth->freeq_pages[pn]);
-			}
-
-			/* Then put our new mapping into the page table */
-			geth->freeq_pages[pn] = page;
-
-		}
 
 		dev_dbg(geth->dev, "fill entry %d page ref count %d add %d refs\n",
 			pn, page_ref_count(page), 1 << fpp_order);
 
+
 		if (page_ref_count(page) == 0) {
 			dev_info(geth->dev, "lost page: page count 0\n");
-			geth->freeq_pages[pn] = NULL;
+			geth->freeq_lost++;
+			page = geth_freeq_alloc_map_page(geth, pn);
 		}
 
 		if (page_ref_count(page) > 1) {
 			unsigned int fl = (pn - epn) & m_pn;
-			dma_addr_t mapping;
 
 			if (fl > 64 >> fpp_order)
 				break;
 
 			geth->freeq_replaced++;
 
-			/* Unmap and release page */
-			mapping = geth->freeq_ring[pn << fpp_order].word2.buf_adr;
-			dma_unmap_page(geth->dev, mapping, PAGE_SIZE, DMA_FROM_DEVICE);
-			put_page(geth->freeq_pages[pn]);
-			geth->freeq_pages[pn] = NULL;
-			continue;
+			page = geth_freeq_alloc_map_page(geth, pn);
+			if (!page)
+				break;
 
 		}
 
@@ -919,7 +869,7 @@ static unsigned int geth_fill_freeq(struct gemini_ethernet *geth, bool refill)
 		pn &= m_pn;
 	}
 
-	wmb();
+	dma_wmb();
 	writew(pn << fpp_order, geth->base + GLOBAL_SWFQ_RWPTR_REG + 2);
 
 	spin_unlock_irqrestore(&geth->freeq_lock, flags);
@@ -953,12 +903,11 @@ static int geth_setup_freeq(struct gemini_ethernet *geth)
 				   GFP_KERNEL);
 	if (!geth->freeq_pages)
 		goto err_freeq;
-//	geth->num_freeq_pages = pages;
 
-//	dev_info(geth->dev, "allocate %d pages for queue\n", pages);
-//	for (pn = 0; pn < pages; pn++)
-//		if (!geth_freeq_alloc_map_page(geth, pn))
-//			goto err_freeq_alloc;
+	dev_info(geth->dev, "allocate %d pages for queue\n", pages);
+	for (pn = 0; pn < pages; pn++)
+		if (!geth_freeq_alloc_map_page(geth, pn))
+			goto err_freeq_alloc;
 
 	filled = geth_fill_freeq(geth, false);
 	if (!filled)
@@ -1011,17 +960,12 @@ static void geth_cleanup_freeq(struct gemini_ethernet *geth)
 	writel(0, geth->base + GLOBAL_SW_FREEQ_BASE_SIZE_REG);
 
 	for (pn = 0; pn < pages; pn++) {
-
-		page = geth->freeq_pages[pn];
-
 		mapping = geth->freeq_ring[pn << fpp_order].word2.buf_adr;
 		dma_unmap_single(geth->dev, mapping, frag_len, DMA_FROM_DEVICE);
 
-//		gpage = &geth->freeq_pages[pn];
-//		while (page_ref_count(gpage->page) > 0)
-//			put_page(gpage->page);
-		while (page_ref_count(geth->freeq_pages[pn]) > 0)
-			put_page(geth->freeq_pages[pn]);
+		page = geth->freeq_pages[pn];
+		while (page_ref_count(page) > 0)
+			put_page(page);
 	}
 
 	kfree(geth->freeq_pages);
@@ -1053,9 +997,9 @@ static int geth_resize_freeq(struct gemini_ethernet_port *port)
 	int ret;
 
 	if (netdev->dev_id == 0)
-		other_netdev = geth->port1->netdev;
+		other_netdev = (geth->port1)? geth->port1->netdev : NULL;
 	else
-		other_netdev = geth->port0->netdev;
+		other_netdev = (geth->port0)? geth->port0->netdev : NULL;
 
 	if (other_netdev && netif_running(other_netdev))
 		return -EBUSY;
@@ -1086,7 +1030,7 @@ static int geth_resize_freeq(struct gemini_ethernet_port *port)
 	en = readl(geth->base + GLOBAL_INTERRUPT_ENABLE_4_REG);
 	en &= ~SWFQ_EMPTY_INT_BIT;
 	writel(en, geth->base + GLOBAL_INTERRUPT_ENABLE_4_REG);
-	spin_unlock_irqrestore(&geth->irq_lock, flags);
+//	spin_unlock_irqrestore(&geth->irq_lock, flags);
 
 	/* Drop the old queue */
 	if (geth->freeq_ring)
@@ -1100,7 +1044,7 @@ static int geth_resize_freeq(struct gemini_ethernet_port *port)
 	 * after probe(), this is where the interrupts get turned on
 	 * in the first place.
 	 */
-	spin_lock_irqsave(&geth->irq_lock, flags);
+//	spin_lock_irqsave(&geth->irq_lock, flags);
 	en |= SWFQ_EMPTY_INT_BIT;
 	writel(en, geth->base + GLOBAL_INTERRUPT_ENABLE_4_REG);
 	spin_unlock_irqrestore(&geth->irq_lock, flags);
@@ -1197,7 +1141,8 @@ static int gmac_map_tx_bufs(struct net_device *netdev, struct sk_buff *skb,
 
 		mapping = dma_map_single(geth->dev, buffer, buflen,
 					 DMA_TO_DEVICE);
-		if (dma_mapping_error(geth->dev, mapping))
+		if (dma_mapping_error(geth->dev, mapping) ||
+ 			!(mapping & PAGE_MASK))
 			goto map_error;
 
 		txd = txq->ring + w;
@@ -1404,7 +1349,6 @@ static unsigned int gmac_rx(struct net_device *netdev, unsigned int budget)
 	void __iomem *ptr_reg = port->rxq_rwptr;
 	unsigned int frame_len, frag_len;
 	struct gmac_rxdesc *rx = NULL;
-//	struct gmac_queue_page *gpage;
 	static struct sk_buff *skb;
 	union gmac_rxdesc_0 word0;
 	union gmac_rxdesc_1 word1;
@@ -1519,6 +1463,22 @@ static int gmac_napi_poll(struct napi_struct *napi, int budget)
 	freeq_threshold = 1 << (geth->freeq_order - 1);
 	u64_stats_update_begin(&port->rx_stats_syncp);
 
+/* ORG:
+	rx = budget - gmac_rx(napi->dev, budget);
+
+	if (rx == 0) {
+		napi_gro_flush(napi, false);
+		__napi_complete(napi);
+		gmac_enable_rx_irq(napi->dev, 1);
+		++port->rx_napi_exits;
+	}
+
+	port->freeq_refill += rx;
+	if (port->freeq_refill > freeq_threshold) {
+		port->freeq_refill -= freeq_threshold;
+		toe_fill_freeq(toe, 0);
+	}
+*/
 	received = gmac_rx(napi->dev, budget);
 	if (received < budget) {
 		napi_gro_flush(napi, false);
@@ -1527,13 +1487,13 @@ static int gmac_napi_poll(struct napi_struct *napi, int budget)
 		++port->rx_napi_exits;
 	}
 
-//	port->freeq_refill += (budget - received);
-	port->freeq_refill += received;
+	port->freeq_refill += (budget - received);
 	if (port->freeq_refill > freeq_threshold) {
 		port->freeq_refill -= freeq_threshold;
 		geth_fill_freeq(geth, true);
 	}
 
+	u64_stats_update_end(&port->rx_stats_syncp);
 	return received;
 }
 
@@ -2078,7 +2038,7 @@ static void gmac_get_ethtool_stats(struct net_device *netdev,
 		*values++ = port->tx_frags_linearized;
 		*values++ = port->tx_hw_csummed;
 		*values++ = port->geth->freeq_replaced;
-
+		*values++ = port->geth->freeq_lost;
 	} while (u64_stats_fetch_retry(&port->tx_stats_syncp, start));
 }
 
@@ -2551,7 +2511,9 @@ static int gemini_ethernet_probe(struct platform_device *pdev)
 	if (IS_ERR(geth->base))
 		return PTR_ERR(geth->base);
 	geth->dev = dev;
-
+	geth->port0 = NULL;
+	geth->port1 = NULL;
+ 
 	/* Wait for ports to stabilize */
 	do {
 		udelay(2);

@@ -1,6 +1,6 @@
 #!/bin/sh
 kexec -d -l /tmp/openwrt-gemini-raidsonic-nas4220-zImage \
- --dtb=/tmp/gemini-nas4220b.dtb --image-size=12455829
+ --dtb=/tmp/gemini-nas4220b.dtb --image-size=12582912
 
 if [ -f "/tmp/openwrt-gemini-raidsonic-rootfs.cpio.gz" ]; then
   kexec -d --initrd=/tmp/openwrt-gemini-raidsonic-rootfs.cpio.gz \

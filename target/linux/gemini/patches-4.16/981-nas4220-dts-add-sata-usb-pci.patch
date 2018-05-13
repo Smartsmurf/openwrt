@@ -72,7 +72,7 @@
 +		};
 +
 +		usb@69000000 {
-+			status = "okay";
++			status = "disabled";
 +		};
  	};
  };
