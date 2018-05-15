@@ -40,7 +40,7 @@
 +static irqreturn_t gemini_pata_interrupt(int irq, void *dev)
 +{
 +	struct ata_host *host = dev;
-+	unsigned int i, handled = 0;
++	unsigned int i; /* , handled = 0; */
 +	unsigned long flags;
 +
 +	spin_lock_irqsave(&host->lock, flags);
@@ -53,18 +53,18 @@
 +			ap->ops->sff_check_status(ap);
 +		else if (qc && (!(qc->tf.flags & ATA_TFLAG_POLLING)) &&
 +				(qc->flags & ATA_QCFLAG_ACTIVE))
-+			handled |= ata_bmdma_port_intr(ap, qc);
++			/* handled |= */ ata_bmdma_port_intr(ap, qc);
 +		else
 +			ap->ops->sff_check_status(ap);
 +	}
 +	spin_unlock_irqrestore(&host->lock, flags);
 +
-+	if (!handled) {
++	/* if (!handled) {
 +		pr_err(DRV_NAME ": Unexpected interrupt\n");
 +		handled = IRQ_HANDLED;
-+	}
++	} */
 +
-+	return IRQ_RETVAL(handled);
++	return IRQ_RETVAL(IRQ_HANDLED); /* IRQ_RETVAL(handled); */
 +}
 +
  #else

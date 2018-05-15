@@ -6,11 +6,11 @@ config rdate
 	option interface	wan
 
 config 'led'
-	option 'sysfs' 'nas42x0b:green:os'
+	option 'sysfs' 'nas4220b:green:os'
 	option 'name' 'os'
 	option 'trigger' 'heartbeat'
 
 config 'led'
 	option 'name' 'disk'
-	option 'sysfs' 'nas42x0b:orange:hdd'
+	option 'sysfs' 'nas4220b:orange:hdd'
 	option 'trigger' 'ide-disk'
