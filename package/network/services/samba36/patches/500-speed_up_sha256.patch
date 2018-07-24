@@ -1,0 +1,246 @@
+--- a/lib/crypto/sha256.c	2015-02-22 15:11:32.000000000 +0100
++++ b/lib/crypto/sha256.c	2018-07-19 14:21:01.191722432 +0200
+@@ -41,11 +41,30 @@
+ #include "replace.h"
+ #include "sha256.h"
+ 
++#pragma GCC optimize ("O3")
++ 
+ #define Ch(x,y,z) (((x) & (y)) ^ ((~(x)) & (z)))
+ #define Maj(x,y,z) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
+ 
++#ifdef __arm__
++
++static inline __attribute__((always_inline))
++uint32_t arm_ror_imm(uint32_t v, uint32_t sh) {
++  uint32_t d;
++  asm ("ROR %[Rd], %[Rm], %[Is]" : [Rd] "=r" (d) : [Rm] "r" (v), [Is] "i" (sh));
++  return d;
++}
++
++#define ROTR(x,n)   arm_ror_imm(x, n)
++
++#else
++
+ #define ROTR(x,n)   (((x)>>(n)) | ((x) << (32 - (n))))
+ 
++#endif
++
++
++
+ #define Sigma0(x)	(ROTR(x,2)  ^ ROTR(x,13) ^ ROTR(x,22))
+ #define Sigma1(x)	(ROTR(x,6)  ^ ROTR(x,11) ^ ROTR(x,25))
+ #define sigma0(x)	(ROTR(x,7)  ^ ROTR(x,18) ^ ((x)>>3))
+@@ -82,8 +101,9 @@
+ void
+ SHA256_Init (SHA256_CTX *m)
+ {
+-    m->sz[0] = 0;
+-    m->sz[1] = 0;
++    m->datalen = 0;
++    m->bitlen = 0;
++
+     A = 0x6a09e667;
+     B = 0xbb67ae85;
+     C = 0x3c6ef372;
+@@ -95,11 +115,11 @@
+ }
+ 
+ static void
+-calc (SHA256_CTX *m, uint32_t *in)
++sha256_transform (SHA256_CTX *m, uint8_t *in)
+ {
+     uint32_t AA, BB, CC, DD, EE, FF, GG, HH;
+     uint32_t data[64];
+-    int i;
++    int i, j;
+ 
+     AA = A;
+     BB = B;
+@@ -110,8 +130,8 @@
+     GG = G;
+     HH = H;
+ 
+-    for (i = 0; i < 16; ++i)
+-	data[i] = in[i];
++    for (i = 0, j = 0; i < 16; i++, j += 4)
++	data[i] = (in[j] << 24) | (in[j + 1] << 16) | (in[j + 2] << 8) | (in[j + 3]);
+     for (i = 16; i < 64; ++i)
+ 	data[i] = sigma1(data[i-2]) + data[i-7] + 
+ 	    sigma0(data[i-15]) + data[i - 16];
+@@ -142,112 +162,60 @@
+     H += HH;
+ }
+ 
+-/*
+- * From `Performance analysis of MD5' by Joseph D. Touch <touch@isi.edu>
+- */
+-
+-#if !defined(WORDS_BIGENDIAN) || defined(_CRAY)
+-/* Vector Crays doesn't have a good 32-bit type, or more precisely,
+-   int32_t as defined by <bind/bitypes.h> isn't 32 bits, and we don't
+-   want to depend in being able to redefine this type.  To cope with
+-   this we have to clamp the result in some places to [0,2^32); no
+-   need to do this on other machines.  Did I say this was a mess?
+-   */
+-
+-#ifdef _CRAY
+-#define CRAYFIX(X) ((X) & 0xffffffff)
+-#else
+-#define CRAYFIX(X) (X)
+-#endif
+-
+-static inline uint32_t
+-cshift (uint32_t x, unsigned int n)
+-{
+-    x = CRAYFIX(x);
+-    return CRAYFIX((x << n) | (x >> (32 - n)));
+-}
+-
+-static inline uint32_t
+-swap_uint32_t (uint32_t t)
+-{
+-    uint32_t temp1, temp2;
+-
+-    temp1   = cshift(t, 16);
+-    temp2   = temp1 >> 8;
+-    temp1  &= 0x00ff00ff;
+-    temp2  &= 0x00ff00ff;
+-    temp1 <<= 8;
+-    return temp1 | temp2;
+-}
+-#endif
+-
+-struct x32{
+-    unsigned int a:32;
+-    unsigned int b:32;
+-};
+-
+ void
+ SHA256_Update (SHA256_CTX *m, const void *v, size_t len)
+ {
+-    const unsigned char *p = (const unsigned char *)v;
+-    size_t old_sz = m->sz[0];
+-    size_t offset;
+-
+-    m->sz[0] += len * 8;
+-    if (m->sz[0] < old_sz)
+-	++m->sz[1];
+-    offset = (old_sz / 8) % 64;
+-    while(len > 0){
+-	size_t l = MIN(len, 64 - offset);
+-	memcpy(m->save + offset, p, l);
+-	offset += l;
+-	p += l;
+-	len -= l;
+-	if(offset == 64){
+-#if !defined(WORDS_BIGENDIAN) || defined(_CRAY)
+-	    int i;
+-	    uint32_t current[16];
+-	    struct x32 *u = (struct x32*)m->save;
+-	    for(i = 0; i < 8; i++){
+-		current[2*i+0] = swap_uint32_t(u[i].a);
+-		current[2*i+1] = swap_uint32_t(u[i].b);
+-	    }
+-	    calc(m, current);
+-#else
+-	    calc(m, (uint32_t*)m->save);
+-#endif
+-	    offset = 0;
+-	}
++    const unsigned char *data = (const unsigned char *)v;
++    uint32_t i;
++
++    for (i = 0; i < len; ++i) {
++        m->data[m->datalen] = data[i];
++        m->datalen++;
++        if (m->datalen == 64) {
++            sha256_transform(m, m->data);
++            m->bitlen += 512;
++            m->datalen = 0;
++        }
+     }
+ }
+ 
+ void
+ SHA256_Final (void *res, SHA256_CTX *m)
+ {
+-    unsigned char zeros[72];
+-    unsigned offset = (m->sz[0] / 8) % 64;
+-    unsigned int dstart = (120 - offset - 1) % 64 + 1;
+-
+-    *zeros = 0x80;
+-    memset (zeros + 1, 0, sizeof(zeros) - 1);
+-    zeros[dstart+7] = (m->sz[0] >> 0) & 0xff;
+-    zeros[dstart+6] = (m->sz[0] >> 8) & 0xff;
+-    zeros[dstart+5] = (m->sz[0] >> 16) & 0xff;
+-    zeros[dstart+4] = (m->sz[0] >> 24) & 0xff;
+-    zeros[dstart+3] = (m->sz[1] >> 0) & 0xff;
+-    zeros[dstart+2] = (m->sz[1] >> 8) & 0xff;
+-    zeros[dstart+1] = (m->sz[1] >> 16) & 0xff;
+-    zeros[dstart+0] = (m->sz[1] >> 24) & 0xff;
+-    SHA256_Update (m, zeros, dstart + 8);
+-    {
+-	int i;
+-	unsigned char *r = (unsigned char*)res;
+-
+-	for (i = 0; i < 8; ++i) {
+-	    r[4*i+3] = m->counter[i] & 0xFF;
+-	    r[4*i+2] = (m->counter[i] >> 8) & 0xFF;
+-	    r[4*i+1] = (m->counter[i] >> 16) & 0xFF;
+-	    r[4*i]   = (m->counter[i] >> 24) & 0xFF;
+-	}
++    unsigned char *hash = (unsigned char*)res;
++    uint32_t i = m->datalen;
++
++    // Pad whatever data is left in the buffer.
++    if (m->datalen < 56) {
++        m->data[i++] = 0x80;
++        while (i < 56)
++            m->data[i++] = 0x00;
++    } else {
++        m->data[i++] = 0x80;
++        while (i < 64)
++            m->data[i++] = 0x00;
++        sha256_transform(m, m->data);
++        memset(m->data, 0, 56);
++    }
++
++    // Append to the padding the total message's length in bits and transform.
++    m->bitlen += m->datalen * 8;
++    m->data[63] = m->bitlen;
++    m->data[62] = m->bitlen >> 8;
++    m->data[61] = m->bitlen >> 16;
++    m->data[60] = m->bitlen >> 24;
++    m->data[59] = m->bitlen >> 32;
++    m->data[58] = m->bitlen >> 40;
++    m->data[57] = m->bitlen >> 48;
++    m->data[56] = m->bitlen >> 56;
++    sha256_transform(m, m->data);
++
++    // Since this implementation uses little endian byte ordering and SHA uses big endian,
++    // reverse all the bytes when copying the final state to the output hash.
++    for (i = 0; i < 8; i++) {
++        *hash++ = (m->counter[i] >> 24) & 0xFF;
++        *hash++ = (m->counter[i] >> 16) & 0xFF;
++        *hash++ = (m->counter[i] >> 8) & 0xFF;
++        *hash++ = m->counter[i] & 0xFF;
+     }
+ }
+diff -Nur samba-3.6.25.org/lib/crypto/sha256.h samba-3.6.25.ok/lib/crypto/sha256.h
+--- a/lib/crypto/sha256.h	2015-02-22 15:11:32.000000000 +0100
++++ a/lib/crypto/sha256.h	2018-07-20 22:26:48.123271398 +0200
+@@ -77,9 +77,10 @@
+ #define SHA256_DIGEST_LENGTH 32
+ 
+ struct hc_sha256state {
+-  unsigned int sz[2];
++  uint32_t datalen;
++  uint64_t bitlen;
+   uint32_t counter[8];
+-  unsigned char save[64];
++  unsigned char data[64];
+ };
+ 
+ typedef struct hc_sha256state SHA256_CTX;
+

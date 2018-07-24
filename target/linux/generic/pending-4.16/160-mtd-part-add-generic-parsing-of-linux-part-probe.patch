@@ -96,13 +96,12 @@ Signed-off-by: Hauke Mehrtens <hauke@hauke-m.de>
  
 --- a/drivers/mtd/mtdpart.c
 +++ b/drivers/mtd/mtdpart.c
-@@ -29,6 +29,7 @@
+@@ -29,5 +29,6 @@
  #include <linux/kmod.h>
  #include <linux/mtd/mtd.h>
  #include <linux/mtd/partitions.h>
 +#include <linux/of.h>
  #include <linux/err.h>
- #include <linux/of.h>
  
 @@ -864,6 +865,32 @@ void deregister_mtd_parser(struct mtd_pa
  EXPORT_SYMBOL_GPL(deregister_mtd_parser);

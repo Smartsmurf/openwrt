@@ -5,12 +5,15 @@ config system
 config rdate
 	option interface	wan
 
-config 'led'
-	option 'sysfs' 'nas4220b:green:os'
-	option 'name' 'os'
-	option 'trigger' 'heartbeat'
+config led
+	option default '0'
+	option name 'os'
+	option sysfs 'nas4220b:green:os'
+	option trigger 'heartbeat'
 
-config 'led'
-	option 'name' 'disk'
-	option 'sysfs' 'nas4220b:orange:hdd'
-	option 'trigger' 'ide-disk'
+config led
+	option default '0'
+	option name 'disk'
+	option sysfs 'nas4220b:orange:hdd'
+	option trigger 'ide-disk'
+

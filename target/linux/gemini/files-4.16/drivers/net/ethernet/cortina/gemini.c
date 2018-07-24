@@ -46,6 +46,8 @@
 #define DRV_NAME		"gmac-gemini"
 #define DRV_VERSION		"1.1"
 
+#define DO_HW_CHKSUM		1
+
 #define HSIZE_8			0x00
 #define HSIZE_16		0x01
 #define HSIZE_32		0x02
@@ -75,10 +77,14 @@
 			      GMAC0_SWTQ00_FIN_INT_BIT)
 #define GMAC0_IRQ4_8 (GMAC0_MIB_INT_BIT | GMAC0_RX_OVERRUN_INT_BIT)
 
+#ifdef DO_HW_CHKSUM
+#define GMAC_OFFLOAD_FEATURES (NETIF_F_SG | NETIF_F_HW_CSUM | \
+		NETIF_F_TSO | NETIF_F_TSO_ECN | NETIF_F_TSO6)
+#else
 #define GMAC_OFFLOAD_FEATURES (NETIF_F_SG | NETIF_F_IP_CSUM | \
 		NETIF_F_IPV6_CSUM | NETIF_F_RXCSUM | \
 		NETIF_F_TSO | NETIF_F_TSO_ECN | NETIF_F_TSO6)
-
+#endif
 /**
  * struct gmac_queue_page - page buffer per-page info
  */
@@ -148,7 +154,8 @@ struct gemini_ethernet {
 	void __iomem *base;
 	struct gemini_ethernet_port *port0;
 	struct gemini_ethernet_port *port1;
-
+	bool initialized;
+ 
 	spinlock_t	irq_lock; /* Locks IRQ-related registers */
 	unsigned int	freeq_order;
 	unsigned int	freeq_frag_order;
@@ -595,7 +602,7 @@ static void gmac_clean_txq(struct net_device *netdev, struct gmac_txq *txq,
 	if (c == r)
 		return;
 
-	dma_rmb();
+	rmb();
 	while (c != r) {
 		txd = txq->ring + c;
 		word0 = txd->word0;
@@ -633,7 +640,8 @@ static void gmac_clean_txq(struct net_device *netdev, struct gmac_txq *txq,
 
 			u64_stats_update_begin(&port->tx_stats_syncp);
 			port->tx_frag_stats[nfrags]++;
-			u64_stats_update_end(&port->ir_stats_syncp);
+/* ORG:			u64_stats_update_end(&port->ir_stats_syncp); */
+			u64_stats_update_end(&port->tx_stats_syncp);
 		}
 	}
 
@@ -726,7 +734,7 @@ static void gmac_cleanup_rxq(struct net_device *netdev)
 
 	writel(0, dma_reg);
 
-	dma_rmb();
+	rmb();
 	/* Loop from read pointer to write pointer of the RX queue
 	 * and free up all pages by the queue.
 	 */
@@ -869,7 +877,7 @@ static unsigned int geth_fill_freeq(struct gemini_ethernet *geth, bool refill)
 		pn &= m_pn;
 	}
 
-	dma_wmb();
+	wmb();
 	writew(pn << fpp_order, geth->base + GLOBAL_SWFQ_RWPTR_REG + 2);
 
 	spin_unlock_irqrestore(&geth->freeq_lock, flags);
@@ -1461,9 +1469,13 @@ static int gmac_napi_poll(struct napi_struct *napi, int budget)
 	unsigned int received;
 
 	freeq_threshold = 1 << (geth->freeq_order - 1);
-	u64_stats_update_begin(&port->rx_stats_syncp);
 
-/* ORG:
+	/* Handle TX completions */
+	// gmac_cleanup_txqs(napi->dev);
+
+/* ORG:	u64_stats_update_begin(&port->rx_stats_syncp); */
+
+/* WV:
 	rx = budget - gmac_rx(napi->dev, budget);
 
 	if (rx == 0) {
@@ -1479,6 +1491,8 @@ static int gmac_napi_poll(struct napi_struct *napi, int budget)
 		toe_fill_freeq(toe, 0);
 	}
 */
+/* LW:
+
 	received = gmac_rx(napi->dev, budget);
 	if (received < budget) {
 		napi_gro_flush(napi, false);
@@ -1492,8 +1506,24 @@ static int gmac_napi_poll(struct napi_struct *napi, int budget)
 		port->freeq_refill -= freeq_threshold;
 		geth_fill_freeq(geth, true);
 	}
+*/
 
-	u64_stats_update_end(&port->rx_stats_syncp);
+	received = gmac_rx(napi->dev, budget);
+
+	if (received < budget) {
+		napi_gro_flush(napi, false);
+		napi_complete_done(napi, received);
+		gmac_enable_rx_irq(napi->dev, 1);
+		++port->rx_napi_exits;
+	}
+
+	port->freeq_refill += (budget - received);
+	if (port->freeq_refill > freeq_threshold) {
+		port->freeq_refill -= freeq_threshold;
+		geth_fill_freeq(geth, true);
+	}
+
+/*	u64_stats_update_end(&port->rx_stats_syncp); */
 	return received;
 }
 
@@ -2264,6 +2294,14 @@ static void gemini_port_remove(struct gemini_ethernet_port *port)
 
 static void gemini_ethernet_init(struct gemini_ethernet *geth)
 {
+	/* Only do this once both ports are online */
+	if (geth->initialized)
+		return;
+	if (geth->port0 && geth->port1)
+		geth->initialized = true;
+	else
+		return;
+
 	writel(0, geth->base + GLOBAL_INTERRUPT_ENABLE_0_REG);
 	writel(0, geth->base + GLOBAL_INTERRUPT_ENABLE_1_REG);
 	writel(0, geth->base + GLOBAL_INTERRUPT_ENABLE_2_REG);
@@ -2410,6 +2448,10 @@ static int gemini_ethernet_port_probe(struct platform_device *pdev)
 		geth->port0 = port;
 	else
 		geth->port1 = port;
+
+	/* This will just be done once both ports are up and reset */
+	gemini_ethernet_init(geth);
+
 	platform_set_drvdata(pdev, port);
 
 	/* Set up and register the netdev */
@@ -2529,7 +2571,6 @@ static int gemini_ethernet_probe(struct platform_device *pdev)
 
 	spin_lock_init(&geth->irq_lock);
 	spin_lock_init(&geth->freeq_lock);
-	gemini_ethernet_init(geth);
 
 	/* The children will use this */
 	platform_set_drvdata(pdev, geth);
@@ -2542,9 +2583,9 @@ static int gemini_ethernet_remove(struct platform_device *pdev)
 {
 	struct gemini_ethernet *geth = platform_get_drvdata(pdev);
 
-	gemini_ethernet_init(geth);
 	geth_cleanup_freeq(geth);
-
+	geth->initialized = false;
+ 
 	return 0;
 }
 
