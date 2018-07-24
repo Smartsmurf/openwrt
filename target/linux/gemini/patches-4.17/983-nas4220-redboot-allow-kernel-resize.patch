@@ -1,0 +1,23 @@
+--- a/arch/arm/boot/dts/gemini-nas4220b.dts
++++ b/arch/arm/boot/dts/gemini-nas4220b.dts
+@@ -89,7 +89,7 @@
+ 				read-only;
+ 			};
+ 			partition@20000 {
+-				label = "Kernel";
++				label = "Kern";
+ 				reg = <0x00020000 0x00300000>;
+ 			};
+ 			partition@320000 {
+@@ -111,10 +111,9 @@
+ 				read-only;
+ 			};
+ 			partition@fe0000 {
+ 				label = "FIS directory";
+ 				reg = <0x00fe0000 0x00020000>;
+-				read-only;
+ 			};
+ 		};
+ 
+ 		syscon: syscon@40000000 {
+
