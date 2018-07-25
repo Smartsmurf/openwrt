@@ -37,11 +37,7 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
  	depends on m
 --- a/drivers/mtd/mtdpart.c
 +++ b/drivers/mtd/mtdpart.c
-@@ -29,10 +29,12 @@
- #include <linux/kmod.h>
- #include <linux/mtd/mtd.h>
- #include <linux/mtd/partitions.h>
-+#include <linux/magic.h>
+@@ -29,7 +29,8 @@
  #include <linux/of.h>
  #include <linux/err.h>
  
