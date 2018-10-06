@@ -68,7 +68,7 @@
 #define DEFAULT_RX_BUF_ORDER		11
 #define DEFAULT_NAPI_WEIGHT		64
 #define TX_MAX_FRAGS			16
-#define TX_QUEUE_NUM			2	/* max: 6 */
+#define TX_QUEUE_NUM			1	/* max: 6 */
 #define RX_MAX_ALLOC_ORDER		2
 
 #define GMAC0_IRQ0_2 (GMAC0_TXDERR_INT_BIT | GMAC0_TXPERR_INT_BIT | \
@@ -167,11 +167,14 @@ struct gemini_ethernet {
 	spinlock_t	freeq_lock; /* Locks queue from reentrance */
 	u64		freeq_replaced;
 	u64		freeq_lost;
+	u64		rx_dropped_1;
+	u64		rx_dropped_2;
+	u64		rx_dropped_3;
 };
 
 #define GMAC_STATS_NUM	( \
 	RX_STATS_NUM + RX_STATUS_NUM + RX_CHKSUM_NUM + 1 + \
-	TX_MAX_FRAGS + 4)
+	TX_MAX_FRAGS + 4 + 4)
 
 static const char gmac_stats_strings[GMAC_STATS_NUM][ETH_GSTRING_LEN] = {
 	"GMAC_IN_DISCARDS",
@@ -225,6 +228,9 @@ static const char gmac_stats_strings[GMAC_STATS_NUM][ETH_GSTRING_LEN] = {
 	"TX_HW_CSUMMED",
 	"FREEQ_REPLACED",
 	"FREEQ_LOST",
+	"RX_DROPPED_1",
+	"RX_DROPPED_2",
+	"RX_DROPPED_3",
 };
 
 static void gmac_dump_dma_state(struct net_device *netdev);
@@ -343,6 +349,7 @@ static void gmac_speed_set(struct net_device *netdev)
 		if (cap & FLOW_CTRL_TX)
 			pause_tx = 1;
 	}
+	netdev_info(netdev, "pause_rx = %d, pause_tx = %d\n", pause_rx, pause_tx);
 
 	gmac_set_flow_control(netdev, pause_tx, pause_rx);
 
@@ -490,7 +497,10 @@ static int gmac_init(struct net_device *netdev)
 	union gmac_config0 tmp;
 	u32 val;
 
-	config0.bits.max_len = gmac_pick_rx_max_len(netdev->mtu);
+	netdev_info(netdev, "netdev mtu = %d\n",netdev->mtu);
+//	config0.bits.max_len = gmac_pick_rx_max_len(netdev->mtu);
+	netdev_info(netdev, "setting mtu = 1522\n");
+	config0.bits.max_len = gmac_pick_rx_max_len(1522);
 	tmp.bits32 = readl(port->gmac_base + GMAC_CONFIG0);
 	config0.bits.reserved = tmp.bits.reserved;
 	writel(config0.bits32, port->gmac_base + GMAC_CONFIG0);
@@ -1393,6 +1403,7 @@ static unsigned int gmac_rx(struct net_device *netdev, unsigned int budget)
 			netdev_err(netdev,
 				   "rxq[%u]: HW BUG: zero DMA desc\n", r);
 			port->stats.rx_dropped++;
+			// geth->rx_dropped_1++;
 			if (unlikely(skb))
 				napi_free_frags(&port->napi);
 			continue;
@@ -1405,6 +1416,7 @@ static unsigned int gmac_rx(struct net_device *netdev, unsigned int budget)
 			if (skb) {
 				napi_free_frags(&port->napi);
 				port->stats.rx_dropped++;
+				// geth->rx_dropped_2++;
 			}
 
 			skb = gmac_skb_if_good_frame(port, word0, frame_len);
@@ -1453,6 +1465,7 @@ err_drop:
 			put_page(page);
 
 		port->stats.rx_dropped++;
+		// geth->rx_dropped_3++;
 	}
 
 	writew(r, ptr_reg);
@@ -1959,6 +1972,7 @@ static void gmac_get_stats64(struct net_device *netdev,
 	} while (u64_stats_fetch_retry(&port->tx_stats_syncp, start));
 
 	stats->rx_dropped += stats->rx_missed_errors;
+	// port->geth->rx_dropped_1 += stats->rx_missed_errors;
 }
 
 static int gmac_change_mtu(struct net_device *netdev, int new_mtu)
@@ -2069,6 +2083,9 @@ static void gmac_get_ethtool_stats(struct net_device *netdev,
 		*values++ = port->tx_hw_csummed;
 		*values++ = port->geth->freeq_replaced;
 		*values++ = port->geth->freeq_lost;
+		*values++ = port->geth->rx_dropped_1;
+		*values++ = port->geth->rx_dropped_2;
+		*values++ = port->geth->rx_dropped_3;
 	} while (u64_stats_fetch_retry(&port->tx_stats_syncp, start));
 }
 
