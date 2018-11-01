@@ -1,0 +1,14 @@
+--- a/arch/arm/boot/dts/gemini-nas4220b.dts
++++ b/arch/arm/boot/dts/gemini-nas4220b.dts
+@@ -164,9 +164,9 @@
+ 		};
+ 
+ 		sata: sata@46000000 {
+-			cortina,gemini-ata-muxmode = <0>;
++			cortina,gemini-ata-muxmode = <0>;
+ 			cortina,gemini-enable-sata-bridge;
+ 			status = "okay";
+ 		};
+ 
+ 		gpio1: gpio@4e000000 {
+

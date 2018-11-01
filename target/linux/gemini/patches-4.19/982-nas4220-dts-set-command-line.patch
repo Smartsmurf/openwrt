@@ -1,0 +1,14 @@
+--- a/arch/arm/boot/dts/gemini-nas4220b.dts
++++ b/arch/arm/boot/dts/gemini-nas4220b.dts
+@@ -22,9 +22,9 @@
+ 		reg = <0x00000000 0x8000000>;
+ 	};
+ 
+ 	chosen {
+-		bootargs = "console=ttyS0,19200n8";
++		bootargs = "console=ttyS0,19200n8 root=/dev/mtdblock2 rootfstype=squashfs,jffs2 noinitrd";
+ 		stdout-path = &uart0;
+ 	};
+ 
+ 	gpio_keys {
+

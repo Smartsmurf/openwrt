@@ -424,7 +424,7 @@ static int gmac_pick_rx_max_len(int max_l3_len)
 	};
 	int i, n = 5;
 
-	max_l3_len += ETH_HLEN + VLAN_HLEN + 4;
+	max_l3_len += ETH_HLEN + VLAN_HLEN;
 
 	if (max_l3_len > max_len[n])
 		return -1;
@@ -829,8 +829,7 @@ static unsigned int geth_fill_freeq(struct gemini_ethernet *geth, bool refill)
 	union dma_rwptr rw;
 	unsigned int m_pn;
 	struct page *page;
-	unsigned int fl;
-	int prc;
+//	int i;
 
 	/* Mask for page */
 	m_pn = (1 << (geth->freeq_order - fpp_order)) - 1;
@@ -844,33 +843,12 @@ static unsigned int geth_fill_freeq(struct gemini_ethernet *geth, bool refill)
 
 	/* Loop over the freeq ring buffer entries */
 	while (pn != epn) {
+
 		page = geth->freeq_pages[pn];
 
-#if 0
-		prc = page_ref_count(page);
-		switch ( prc ) {
-		case 0:
-			dev_info(geth->dev, "lost page: page count 0\n");
-			geth->freeq_lost++;
-			page = geth_freeq_alloc_map_page(geth, pn);
-			break;
-		case 1:
-			break;
-		default:
-			fl = (pn - epn) & m_pn;
-			if (fl > 64 >> fpp_order)
-				break;
-			dev_info(geth->dev, "page_ref_count = %i, fl = %i, fpp_order = %i\n", prc, fl, fpp_order);
-			geth->freeq_replaced++;
-			page = geth_freeq_alloc_map_page(geth, pn);
-			break;
-		}
-		if (!page)
-			break;
-
-#else
 		dev_dbg(geth->dev, "fill entry %d page ref count %d add %d refs\n",
 			pn, page_ref_count(page), 1 << fpp_order);
+
 
 		if (page_ref_count(page) == 0) {
 			dev_info(geth->dev, "lost page: page count 0\n");
@@ -879,7 +857,7 @@ static unsigned int geth_fill_freeq(struct gemini_ethernet *geth, bool refill)
 		}
 
 		if (page_ref_count(page) > 1) {
-			fl = (pn - epn) & m_pn;
+			unsigned int fl = (pn - epn) & m_pn;
 
 			if (fl > 64 >> fpp_order)
 				break;
@@ -891,7 +869,7 @@ static unsigned int geth_fill_freeq(struct gemini_ethernet *geth, bool refill)
 				break;
 
 		}
-#endif
+
 		/* Add one reference per fragment in the page */
 		page_ref_add(page, 1 << fpp_order);
 		count += 1 << fpp_order;
@@ -1060,7 +1038,7 @@ static int geth_resize_freeq(struct gemini_ethernet_port *port)
 	en = readl(geth->base + GLOBAL_INTERRUPT_ENABLE_4_REG);
 	en &= ~SWFQ_EMPTY_INT_BIT;
 	writel(en, geth->base + GLOBAL_INTERRUPT_ENABLE_4_REG);
-	spin_unlock_irqrestore(&geth->irq_lock, flags);
+//	spin_unlock_irqrestore(&geth->irq_lock, flags);
 
 	/* Drop the old queue */
 	if (geth->freeq_ring)
@@ -1074,7 +1052,7 @@ static int geth_resize_freeq(struct gemini_ethernet_port *port)
 	 * after probe(), this is where the interrupts get turned on
 	 * in the first place.
 	 */
-	spin_lock_irqsave(&geth->irq_lock, flags);
+//	spin_lock_irqsave(&geth->irq_lock, flags);
 	en |= SWFQ_EMPTY_INT_BIT;
 	writel(en, geth->base + GLOBAL_INTERRUPT_ENABLE_4_REG);
 	spin_unlock_irqrestore(&geth->irq_lock, flags);
@@ -1491,7 +1469,11 @@ static int gmac_napi_poll(struct napi_struct *napi, int budget)
 	unsigned int received;
 
 	freeq_threshold = 1 << (geth->freeq_order - 1);
-	u64_stats_update_begin(&port->rx_stats_syncp);
+
+	/* Handle TX completions */
+	// gmac_cleanup_txqs(napi->dev);
+
+/* ORG:	u64_stats_update_begin(&port->rx_stats_syncp); */
 
 /* WV:
 	rx = budget - gmac_rx(napi->dev, budget);
@@ -1541,7 +1523,7 @@ static int gmac_napi_poll(struct napi_struct *napi, int budget)
 		geth_fill_freeq(geth, true);
 	}
 
-	u64_stats_update_end(&port->rx_stats_syncp);
+/*	u64_stats_update_end(&port->rx_stats_syncp); */
 	return received;
 }
 
@@ -1829,7 +1811,7 @@ static int gmac_open(struct net_device *netdev)
 		     HRTIMER_MODE_REL);
 	port->rx_coalesce_timer.function = &gmac_coalesce_delay_expired;
 
-	netdev_info(netdev, "opened 2\n");
+	netdev_info(netdev, "opened\n");
 
 	return 0;
 
