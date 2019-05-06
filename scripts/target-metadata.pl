@@ -40,6 +40,8 @@ sub target_config_features(@) {
 		/^small_flash$/ and $ret .= "\tselect SMALL_FLASH\n";
 		/^nand$/ and $ret .= "\tselect NAND_SUPPORT\n";
 		/^virtio$/ and $ret .= "\tselect VIRTIO_SUPPORT\n";
+		/^rootfs-part$/ and $ret .= "\tselect USES_ROOTFS_PART\n";
+		/^boot-part$/ and $ret .= "\tselect USES_BOOT_PART\n";
 	}
 	return $ret;
 }
@@ -168,7 +170,7 @@ EOF
 	print <<EOF;
 choice
 	prompt "Target System"
-	default TARGET_ar71xx
+	default TARGET_ath79
 	reset if !DEVEL
 	
 EOF
@@ -420,6 +422,10 @@ sub gen_profile_mk() {
 		print "PROFILE_NAMES = ".join(" ", map { $_->{id} } @{$cur->{profiles}})."\n";
 		foreach my $profile (@{$cur->{profiles}}) {
 			print $profile->{id}.'_NAME:='.$profile->{name}."\n";
+			print $profile->{id}.'_HAS_IMAGE_METADATA:='.$profile->{has_image_metadata}."\n";
+			if (defined($profile->{supported_devices}) and @{$profile->{supported_devices}} > 0) {
+				print $profile->{id}.'_SUPPORTED_DEVICES:='.join(' ', @{$profile->{supported_devices}})."\n";
+			}
 			print $profile->{id}.'_PACKAGES:='.join(' ', @{$profile->{packages}})."\n";
 		}
 	}

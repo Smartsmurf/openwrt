@@ -10,7 +10,7 @@ ifeq ($(SUBTARGET),cortexa9)
 
 define Device/linksys
   DEVICE_TITLE := Linksys $(1)
-  DEVICE_PACKAGES := kmod-mwlwifi wpad-mini swconfig
+  DEVICE_PACKAGES := kmod-mwlwifi wpad-basic swconfig
 endef
 
 define Device/armada-385-linksys
@@ -50,6 +50,16 @@ define Device/linksys-wrt1900acs
   DEVICE_PACKAGES += mwlwifi-firmware-88w8864
 endef
 TARGET_DEVICES += linksys-wrt1900acs
+
+define Device/linksys-wrt32x
+$(call Device/linksys,WRT32X (Venom))
+  DEVICE_DTS := armada-385-linksys-venom
+  DEVICE_PACKAGES += kmod-btmrvl kmod-mwifiex-sdio mwlwifi-firmware-88w8964
+  $(Device/armada-385-linksys)
+  KERNEL_SIZE := 3072k
+  KERNEL := kernel-bin | append-dtb
+endef
+TARGET_DEVICES += linksys-wrt32x
 
 define Device/linksys-wrt1900ac
   $(call Device/linksys,WRT1900AC (Mamba))
@@ -116,9 +126,9 @@ define Device/armada-388-clearfog-pro
   KERNEL_INSTALL := 1
   KERNEL := kernel-bin
   DEVICE_TITLE := SolidRun ClearFog Pro
-  DEVICE_PACKAGES := mkf2fs e2fsprogs swconfig kmod-fs-vfat kmod-nls-cp437 kmod-nls-iso8859-1
+  DEVICE_PACKAGES := mkf2fs e2fsprogs partx-utils swconfig
   IMAGES := sdcard.img.gz
-  IMAGE/sdcard.img.gz := boot-scr | boot-img | sdcard-img | gzip | append-metadata
+  IMAGE/sdcard.img.gz := boot-scr | boot-img-ext4 | sdcard-img-ext4 | gzip | append-metadata
   DEVICE_DTS := armada-388-clearfog-pro armada-388-clearfog-base
   SUPPORTED_DEVICES := armada-388-clearfog-pro armada-388-clearfog
   UBOOT := clearfog-u-boot-spl.kwb
@@ -129,9 +139,9 @@ define Device/armada-388-clearfog-base
   KERNEL_INSTALL := 1
   KERNEL := kernel-bin
   DEVICE_TITLE := SolidRun ClearFog Base
-  DEVICE_PACKAGES := mkf2fs e2fsprogs kmod-fs-vfat kmod-nls-cp437 kmod-nls-iso8859-1
+  DEVICE_PACKAGES := mkf2fs e2fsprogs partx-utils
   IMAGES := sdcard.img.gz
-  IMAGE/sdcard.img.gz := boot-scr | boot-img | sdcard-img | gzip | append-metadata
+  IMAGE/sdcard.img.gz := boot-scr | boot-img-ext4 | sdcard-img-ext4 | gzip | append-metadata
   DEVICE_DTS := armada-388-clearfog-pro armada-388-clearfog-base
   UBOOT := clearfog-u-boot-spl.kwb
 endef
@@ -152,7 +162,8 @@ define Device/turris-omnia
   DEVICE_TITLE := Turris Omnia
   DEVICE_PACKAGES :=  \
     mkf2fs e2fsprogs kmod-fs-vfat kmod-nls-cp437 kmod-nls-iso8859-1 \
-    wpad-mini kmod-ath9k kmod-ath10k ath10k-firmware-qca988x
+    wpad-basic kmod-ath9k kmod-ath10k-ct ath10k-firmware-qca988x-ct \
+    partx-utils
   IMAGES := $$(IMAGE_PREFIX)-sysupgrade.img.gz omnia-medkit-$$(IMAGE_PREFIX)-initramfs.tar.gz
   IMAGE/$$(IMAGE_PREFIX)-sysupgrade.img.gz := boot-img | sdcard-img | gzip | append-metadata
   IMAGE/omnia-medkit-$$(IMAGE_PREFIX)-initramfs.tar.gz := omnia-medkit-initramfs | gzip

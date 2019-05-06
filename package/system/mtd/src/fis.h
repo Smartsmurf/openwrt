@@ -10,6 +10,5 @@ struct fis_part {
 
 int fis_validate(struct fis_part *old, int n_old, struct fis_part *new, int n_new);
 int fis_remap(struct fis_part *old, int n_old, struct fis_part *new, int n_new);
-void fis_update_len(const char *mtd, ssize_t len);
 
 #endif

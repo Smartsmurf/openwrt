@@ -9,12 +9,10 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=lua
 PKG_VERSION:=5.1.5
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=http://www.lua.org/ftp/ \
-	http://ftp.gwdg.de/pub/languages/lua/ \
-	http://mirrors.dotsrc.org/lua/ \
 	http://www.tecgraf.puc-rio.br/lua/ftp/
 PKG_HASH:=2640fc56a795f29d28ef15e13c34a47e223960b0240e8cb0a82d9b0738695333
 PKG_BUILD_PARALLEL:=1
@@ -48,6 +46,7 @@ $(call Package/lua/Default)
   SECTION:=libs
   CATEGORY:=Libraries
   TITLE+= (libraries)
+  ABI_VERSION:=5.1.5
 endef
 
 define Package/liblua/description
