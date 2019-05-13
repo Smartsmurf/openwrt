@@ -192,7 +192,8 @@ add_overlayfiles() {
 }
 
 # hooks
-sysupgrade_image_check="fwtool_check_signature fwtool_check_image platform_check_image"
+# sysupgrade_image_check="fwtool_check_signature fwtool_check_image platform_check_image"
+sysupgrade_image_check="platform_check_image"
 
 if [ $SAVE_OVERLAY = 1 ]; then
 	[ ! -d /overlay/upper/etc ] && {
