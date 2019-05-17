@@ -1,0 +1,29 @@
+--- a/drivers/crypto/Kconfig	2019-05-18 00:56:59.131803903 +0200
++++ b/drivers/crypto/Kconfig	2019-05-18 00:53:29.837197000 +0200
+@@ -760,6 +760,18 @@
+ 	  cryptographic operations on the system REE.
+ 	  If unsure say Y.
+ 
++config CRYPTO_DEV_CORTINA
++	tristate "Support for Cortina (Gemini) SoC embedded crypto engine"
++	depends on CRYPTO && CRYPTO_HW && OF && HAS_DMA
++	default n
++	select CRYPTO_HASH
++	select CRYPTO_BLKCIPHER
++	select CRYPTO_DES
++	select CRYPTO_AEAD
++	help
++	  Say 'Y' to enable a driver Cortina (Gemini) SoC embedded crypto engine
++	  If unsure say N.
++
+ source "drivers/crypto/hisilicon/Kconfig"
+ 
+ endif # CRYPTO_HW
+--- a/drivers/crypto/Makefile	2019-05-18 00:57:09.559909250 +0200
++++ b/drivers/crypto/Makefile	2019-05-18 00:49:49.317728000 +0200
+@@ -46,4 +46,5 @@
+ obj-$(CONFIG_CRYPTO_DEV_BCM_SPU) += bcm/
+ obj-$(CONFIG_CRYPTO_DEV_SAFEXCEL) += inside-secure/
+ obj-$(CONFIG_CRYPTO_DEV_ARTPEC6) += axis/
++obj-$(CONFIG_CRYPTO_DEV_CORTINA) += cortina/
+ obj-y += hisilicon/
