@@ -84,7 +84,7 @@ static int check_alignment(struct scatterlist *sg_src,
 	return (align && (sg_src->length == sg_dst->length));
 }
 
-static int rk_load_data(struct gemini_crypto_info *dev,
+static int gemini_load_data(struct gemini_crypto_info *dev,
 			struct scatterlist *sg_src,
 			struct scatterlist *sg_dst)
 {
@@ -152,7 +152,7 @@ static int rk_load_data(struct gemini_crypto_info *dev,
 	return 0;
 }
 
-static void rk_unload_data(struct gemini_crypto_info *dev)
+static void gemini_unload_data(struct gemini_crypto_info *dev)
 {
 	struct scatterlist *sg_in, *sg_out;
 
@@ -171,7 +171,7 @@ static irqreturn_t gemini_crypto_irq_handle(int irq, void *dev_id)
 	u32 interrupt_status;
 
 	spin_lock(&dev->lock);
-	interrupt_status = CRYPTO_READ(dev, gemini_crypto_INTSTS);
+/*	interrupt_status = CRYPTO_READ(dev, gemini_crypto_INTSTS);
 	CRYPTO_WRITE(dev, gemini_crypto_INTSTS, interrupt_status);
 
 	if (interrupt_status & 0x0a) {
@@ -179,7 +179,7 @@ static irqreturn_t gemini_crypto_irq_handle(int irq, void *dev_id)
 		dev->err = -EFAULT;
 	}
 	tasklet_schedule(&dev->done_task);
-
+*/
 	spin_unlock(&dev->lock);
 	return IRQ_HANDLED;
 }
@@ -247,16 +247,16 @@ static void gemini_crypto_done_task_cb(unsigned long data)
 		dev->complete(dev->async_req, dev->err);
 }
 
-static struct gemini_crypto_tmp *rk_cipher_algs[] = {
-	&rk_ecb_aes_alg,
-	&rk_cbc_aes_alg,
-	&rk_ecb_des_alg,
-	&rk_cbc_des_alg,
-	&rk_ecb_des3_ede_alg,
-	&rk_cbc_des3_ede_alg,
-	&rk_ahash_sha1,
-	&rk_ahash_sha256,
-	&rk_ahash_md5,
+static struct gemini_crypto_tmp *gemini_cipher_algs[] = {
+	&gemini_ecb_aes_alg,
+	&gemini_cbc_aes_alg,
+	&gemini_ecb_des_alg,
+	&gemini_cbc_des_alg,
+	&gemini_ecb_des3_ede_alg,
+	&gemini_cbc_des3_ede_alg,
+	&gemini_ahash_sha1,
+	&gemini_ahash_sha256,
+	&gemini_ahash_md5,
 };
 
 static int gemini_crypto_register(struct gemini_crypto_info *crypto_info)
@@ -264,14 +264,14 @@ static int gemini_crypto_register(struct gemini_crypto_info *crypto_info)
 	unsigned int i, k;
 	int err = 0;
 
-	for (i = 0; i < ARRAY_SIZE(rk_cipher_algs); i++) {
-		rk_cipher_algs[i]->dev = crypto_info;
-		if (rk_cipher_algs[i]->type == ALG_TYPE_CIPHER)
+	for (i = 0; i < ARRAY_SIZE(gemini_cipher_algs); i++) {
+		gemini_cipher_algs[i]->dev = crypto_info;
+		if (gemini_cipher_algs[i]->type == ALG_TYPE_CIPHER)
 			err = crypto_register_alg(
-					&rk_cipher_algs[i]->alg.crypto);
+					&gemini_cipher_algs[i]->alg.crypto);
 		else
 			err = crypto_register_ahash(
-					&rk_cipher_algs[i]->alg.hash);
+					&gemini_cipher_algs[i]->alg.hash);
 		if (err)
 			goto err_cipher_algs;
 	}
@@ -279,10 +279,10 @@ static int gemini_crypto_register(struct gemini_crypto_info *crypto_info)
 
 err_cipher_algs:
 	for (k = 0; k < i; k++) {
-		if (rk_cipher_algs[i]->type == ALG_TYPE_CIPHER)
-			crypto_unregister_alg(&rk_cipher_algs[k]->alg.crypto);
+		if (gemini_cipher_algs[i]->type == ALG_TYPE_CIPHER)
+			crypto_unregister_alg(&gemini_cipher_algs[k]->alg.crypto);
 		else
-			crypto_unregister_ahash(&rk_cipher_algs[i]->alg.hash);
+			crypto_unregister_ahash(&gemini_cipher_algs[i]->alg.hash);
 	}
 	return err;
 }
@@ -291,11 +291,11 @@ static void gemini_crypto_unregister(void)
 {
 	unsigned int i;
 
-	for (i = 0; i < ARRAY_SIZE(rk_cipher_algs); i++) {
-		if (rk_cipher_algs[i]->type == ALG_TYPE_CIPHER)
-			crypto_unregister_alg(&rk_cipher_algs[i]->alg.crypto);
+	for (i = 0; i < ARRAY_SIZE(gemini_cipher_algs); i++) {
+		if (gemini_cipher_algs[i]->type == ALG_TYPE_CIPHER)
+			crypto_unregister_alg(&gemini_cipher_algs[i]->alg.crypto);
 		else
-			crypto_unregister_ahash(&rk_cipher_algs[i]->alg.hash);
+			crypto_unregister_ahash(&gemini_cipher_algs[i]->alg.hash);
 	}
 }
 
@@ -307,7 +307,7 @@ static void gemini_crypto_action(void *data)
 }
 
 static const struct of_device_id crypto_of_id_table[] = {
-	{ .compatible = "rockchip,rk3288-crypto" },
+	{ .compatible = "cortina-crypto" },
 	{}
 };
 MODULE_DEVICE_TABLE(of, crypto_of_id_table);
@@ -401,8 +401,8 @@ static int gemini_crypto_probe(struct platform_device *pdev)
 
 	crypto_info->enable_clk = gemini_crypto_enable_clk;
 	crypto_info->disable_clk = gemini_crypto_disable_clk;
-	crypto_info->load_data = rk_load_data;
-	crypto_info->unload_data = rk_unload_data;
+	crypto_info->load_data = gemini_load_data;
+	crypto_info->unload_data = gemini_unload_data;
 	crypto_info->enqueue = gemini_crypto_enqueue;
 	crypto_info->busy = false;
 

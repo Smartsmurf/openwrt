@@ -11,7 +11,7 @@
  *
  * Some ideas are from marvell/cesa.c and s5p-sss.c driver.
  */
-#include "rk3288_crypto.h"
+#include "gemini_crypto.h"
 
 /*
  * IC can not process zero message hash,
@@ -21,17 +21,17 @@
 static int zero_message_process(struct ahash_request *req)
 {
 	struct crypto_ahash *tfm = crypto_ahash_reqtfm(req);
-	int rk_digest_size = crypto_ahash_digestsize(tfm);
+	int gemini_digest_size = crypto_ahash_digestsize(tfm);
 
-	switch (rk_digest_size) {
+	switch (gemini_digest_size) {
 	case SHA1_DIGEST_SIZE:
-		memcpy(req->result, sha1_zero_message_hash, rk_digest_size);
+		memcpy(req->result, sha1_zero_message_hash, gemini_digest_size);
 		break;
 	case SHA256_DIGEST_SIZE:
-		memcpy(req->result, sha256_zero_message_hash, rk_digest_size);
+		memcpy(req->result, sha256_zero_message_hash, gemini_digest_size);
 		break;
 	case MD5_DIGEST_SIZE:
-		memcpy(req->result, md5_zero_message_hash, rk_digest_size);
+		memcpy(req->result, md5_zero_message_hash, gemini_digest_size);
 		break;
 	default:
 		return -EINVAL;
@@ -40,16 +40,16 @@ static int zero_message_process(struct ahash_request *req)
 	return 0;
 }
 
-static void rk_ahash_crypto_complete(struct crypto_async_request *base, int err)
+static void gemini_ahash_crypto_complete(struct crypto_async_request *base, int err)
 {
 	if (base->complete)
 		base->complete(base, err);
 }
 
-static void rk_ahash_reg_init(struct rk_crypto_info *dev)
+static void gemini_ahash_reg_init(struct gemini_crypto_info *dev)
 {
 	struct ahash_request *req = ahash_request_cast(dev->async_req);
-	struct rk_ahash_rctx *rctx = ahash_request_ctx(req);
+	struct gemini_ahash_rctx *rctx = ahash_request_ctx(req);
 	int reg_status = 0;
 
 	reg_status = CRYPTO_READ(dev, RK_CRYPTO_CTRL) |
@@ -79,11 +79,11 @@ static void rk_ahash_reg_init(struct rk_crypto_info *dev)
 	CRYPTO_WRITE(dev, RK_CRYPTO_HASH_MSG_LEN, dev->total);
 }
 
-static int rk_ahash_init(struct ahash_request *req)
+static int gemini_ahash_init(struct ahash_request *req)
 {
-	struct rk_ahash_rctx *rctx = ahash_request_ctx(req);
+	struct gemini_ahash_rctx *rctx = ahash_request_ctx(req);
 	struct crypto_ahash *tfm = crypto_ahash_reqtfm(req);
-	struct rk_ahash_ctx *ctx = crypto_ahash_ctx(tfm);
+	struct gemini_ahash_ctx *ctx = crypto_ahash_ctx(tfm);
 
 	ahash_request_set_tfm(&rctx->fallback_req, ctx->fallback_tfm);
 	rctx->fallback_req.base.flags = req->base.flags &
@@ -92,11 +92,11 @@ static int rk_ahash_init(struct ahash_request *req)
 	return crypto_ahash_init(&rctx->fallback_req);
 }
 
-static int rk_ahash_update(struct ahash_request *req)
+static int gemini_ahash_update(struct ahash_request *req)
 {
-	struct rk_ahash_rctx *rctx = ahash_request_ctx(req);
+	struct gemini_ahash_rctx *rctx = ahash_request_ctx(req);
 	struct crypto_ahash *tfm = crypto_ahash_reqtfm(req);
-	struct rk_ahash_ctx *ctx = crypto_ahash_ctx(tfm);
+	struct gemini_ahash_ctx *ctx = crypto_ahash_ctx(tfm);
 
 	ahash_request_set_tfm(&rctx->fallback_req, ctx->fallback_tfm);
 	rctx->fallback_req.base.flags = req->base.flags &
@@ -107,11 +107,11 @@ static int rk_ahash_update(struct ahash_request *req)
 	return crypto_ahash_update(&rctx->fallback_req);
 }
 
-static int rk_ahash_final(struct ahash_request *req)
+static int gemini_ahash_final(struct ahash_request *req)
 {
-	struct rk_ahash_rctx *rctx = ahash_request_ctx(req);
+	struct gemini_ahash_rctx *rctx = ahash_request_ctx(req);
 	struct crypto_ahash *tfm = crypto_ahash_reqtfm(req);
-	struct rk_ahash_ctx *ctx = crypto_ahash_ctx(tfm);
+	struct gemini_ahash_ctx *ctx = crypto_ahash_ctx(tfm);
 
 	ahash_request_set_tfm(&rctx->fallback_req, ctx->fallback_tfm);
 	rctx->fallback_req.base.flags = req->base.flags &
@@ -121,11 +121,11 @@ static int rk_ahash_final(struct ahash_request *req)
 	return crypto_ahash_final(&rctx->fallback_req);
 }
 
-static int rk_ahash_finup(struct ahash_request *req)
+static int gemini_ahash_finup(struct ahash_request *req)
 {
-	struct rk_ahash_rctx *rctx = ahash_request_ctx(req);
+	struct gemini_ahash_rctx *rctx = ahash_request_ctx(req);
 	struct crypto_ahash *tfm = crypto_ahash_reqtfm(req);
-	struct rk_ahash_ctx *ctx = crypto_ahash_ctx(tfm);
+	struct gemini_ahash_ctx *ctx = crypto_ahash_ctx(tfm);
 
 	ahash_request_set_tfm(&rctx->fallback_req, ctx->fallback_tfm);
 	rctx->fallback_req.base.flags = req->base.flags &
@@ -138,11 +138,11 @@ static int rk_ahash_finup(struct ahash_request *req)
 	return crypto_ahash_finup(&rctx->fallback_req);
 }
 
-static int rk_ahash_import(struct ahash_request *req, const void *in)
+static int gemini_ahash_import(struct ahash_request *req, const void *in)
 {
-	struct rk_ahash_rctx *rctx = ahash_request_ctx(req);
+	struct gemini_ahash_rctx *rctx = ahash_request_ctx(req);
 	struct crypto_ahash *tfm = crypto_ahash_reqtfm(req);
-	struct rk_ahash_ctx *ctx = crypto_ahash_ctx(tfm);
+	struct gemini_ahash_ctx *ctx = crypto_ahash_ctx(tfm);
 
 	ahash_request_set_tfm(&rctx->fallback_req, ctx->fallback_tfm);
 	rctx->fallback_req.base.flags = req->base.flags &
@@ -151,11 +151,11 @@ static int rk_ahash_import(struct ahash_request *req, const void *in)
 	return crypto_ahash_import(&rctx->fallback_req, in);
 }
 
-static int rk_ahash_export(struct ahash_request *req, void *out)
+static int gemini_ahash_export(struct ahash_request *req, void *out)
 {
-	struct rk_ahash_rctx *rctx = ahash_request_ctx(req);
+	struct gemini_ahash_rctx *rctx = ahash_request_ctx(req);
 	struct crypto_ahash *tfm = crypto_ahash_reqtfm(req);
-	struct rk_ahash_ctx *ctx = crypto_ahash_ctx(tfm);
+	struct gemini_ahash_ctx *ctx = crypto_ahash_ctx(tfm);
 
 	ahash_request_set_tfm(&rctx->fallback_req, ctx->fallback_tfm);
 	rctx->fallback_req.base.flags = req->base.flags &
@@ -164,10 +164,10 @@ static int rk_ahash_export(struct ahash_request *req, void *out)
 	return crypto_ahash_export(&rctx->fallback_req, out);
 }
 
-static int rk_ahash_digest(struct ahash_request *req)
+static int gemini_ahash_digest(struct ahash_request *req)
 {
-	struct rk_ahash_ctx *tctx = crypto_tfm_ctx(req->base.tfm);
-	struct rk_crypto_info *dev = tctx->dev;
+	struct gemini_ahash_ctx *tctx = crypto_tfm_ctx(req->base.tfm);
+	struct gemini_crypto_info *dev = tctx->dev;
 
 	if (!req->nbytes)
 		return zero_message_process(req);
@@ -175,7 +175,7 @@ static int rk_ahash_digest(struct ahash_request *req)
 		return dev->enqueue(dev, &req->base);
 }
 
-static void crypto_ahash_dma_start(struct rk_crypto_info *dev)
+static void crypto_ahash_dma_start(struct gemini_crypto_info *dev)
 {
 	CRYPTO_WRITE(dev, RK_CRYPTO_HRDMAS, dev->addr_in);
 	CRYPTO_WRITE(dev, RK_CRYPTO_HRDMAL, (dev->count + 3) / 4);
@@ -183,7 +183,7 @@ static void crypto_ahash_dma_start(struct rk_crypto_info *dev)
 					  (RK_CRYPTO_HASH_START << 16));
 }
 
-static int rk_ahash_set_data_start(struct rk_crypto_info *dev)
+static int gemini_ahash_set_data_start(struct gemini_crypto_info *dev)
 {
 	int err;
 
@@ -193,11 +193,11 @@ static int rk_ahash_set_data_start(struct rk_crypto_info *dev)
 	return err;
 }
 
-static int rk_ahash_start(struct rk_crypto_info *dev)
+static int gemini_ahash_start(struct gemini_crypto_info *dev)
 {
 	struct ahash_request *req = ahash_request_cast(dev->async_req);
 	struct crypto_ahash *tfm;
-	struct rk_ahash_rctx *rctx;
+	struct gemini_ahash_rctx *rctx;
 
 	dev->total = req->nbytes;
 	dev->left_bytes = req->nbytes;
@@ -225,11 +225,11 @@ static int rk_ahash_start(struct rk_crypto_info *dev)
 		return -EINVAL;
 	}
 
-	rk_ahash_reg_init(dev);
-	return rk_ahash_set_data_start(dev);
+	gemini_ahash_reg_init(dev);
+	return gemini_ahash_set_data_start(dev);
 }
 
-static int rk_ahash_crypto_rx(struct rk_crypto_info *dev)
+static int gemini_ahash_crypto_rx(struct gemini_crypto_info *dev)
 {
 	int err = 0;
 	struct ahash_request *req = ahash_request_cast(dev->async_req);
@@ -246,7 +246,7 @@ static int rk_ahash_crypto_rx(struct rk_crypto_info *dev)
 			}
 			dev->sg_src = sg_next(dev->sg_src);
 		}
-		err = rk_ahash_set_data_start(dev);
+		err = gemini_ahash_set_data_start(dev);
 	} else {
 		/*
 		 * it will take some time to process date after last dma
@@ -272,15 +272,15 @@ out_rx:
 	return err;
 }
 
-static int rk_cra_hash_init(struct crypto_tfm *tfm)
+static int gemini_cra_hash_init(struct crypto_tfm *tfm)
 {
-	struct rk_ahash_ctx *tctx = crypto_tfm_ctx(tfm);
-	struct rk_crypto_tmp *algt;
+	struct gemini_ahash_ctx *tctx = crypto_tfm_ctx(tfm);
+	struct gemini_crypto_tmp *algt;
 	struct ahash_alg *alg = __crypto_ahash_alg(tfm->__crt_alg);
 
 	const char *alg_name = crypto_tfm_alg_name(tfm);
 
-	algt = container_of(alg, struct rk_crypto_tmp, alg.hash);
+	algt = container_of(alg, struct gemini_crypto_tmp, alg.hash);
 
 	tctx->dev = algt->dev;
 	tctx->dev->addr_vir = (void *)__get_free_page(GFP_KERNEL);
@@ -288,9 +288,9 @@ static int rk_cra_hash_init(struct crypto_tfm *tfm)
 		dev_err(tctx->dev->dev, "failed to kmalloc for addr_vir\n");
 		return -ENOMEM;
 	}
-	tctx->dev->start = rk_ahash_start;
-	tctx->dev->update = rk_ahash_crypto_rx;
-	tctx->dev->complete = rk_ahash_crypto_complete;
+	tctx->dev->start = gemini_ahash_start;
+	tctx->dev->update = gemini_ahash_crypto_rx;
+	tctx->dev->complete = gemini_ahash_crypto_complete;
 
 	/* for fallback */
 	tctx->fallback_tfm = crypto_alloc_ahash(alg_name, 0,
@@ -300,30 +300,30 @@ static int rk_cra_hash_init(struct crypto_tfm *tfm)
 		return PTR_ERR(tctx->fallback_tfm);
 	}
 	crypto_ahash_set_reqsize(__crypto_ahash_cast(tfm),
-				 sizeof(struct rk_ahash_rctx) +
+				 sizeof(struct gemini_ahash_rctx) +
 				 crypto_ahash_reqsize(tctx->fallback_tfm));
 
 	return tctx->dev->enable_clk(tctx->dev);
 }
 
-static void rk_cra_hash_exit(struct crypto_tfm *tfm)
+static void gemini_cra_hash_exit(struct crypto_tfm *tfm)
 {
-	struct rk_ahash_ctx *tctx = crypto_tfm_ctx(tfm);
+	struct gemini_ahash_ctx *tctx = crypto_tfm_ctx(tfm);
 
 	free_page((unsigned long)tctx->dev->addr_vir);
 	return tctx->dev->disable_clk(tctx->dev);
 }
 
-struct rk_crypto_tmp rk_ahash_sha1 = {
+struct gemini_crypto_tmp gemini_ahash_sha1 = {
 	.type = ALG_TYPE_HASH,
 	.alg.hash = {
-		.init = rk_ahash_init,
-		.update = rk_ahash_update,
-		.final = rk_ahash_final,
-		.finup = rk_ahash_finup,
-		.export = rk_ahash_export,
-		.import = rk_ahash_import,
-		.digest = rk_ahash_digest,
+		.init = gemini_ahash_init,
+		.update = gemini_ahash_update,
+		.final = gemini_ahash_final,
+		.finup = gemini_ahash_finup,
+		.export = gemini_ahash_export,
+		.import = gemini_ahash_import,
+		.digest = gemini_ahash_digest,
 		.halg = {
 			 .digestsize = SHA1_DIGEST_SIZE,
 			 .statesize = sizeof(struct sha1_state),
@@ -334,26 +334,26 @@ struct rk_crypto_tmp rk_ahash_sha1 = {
 				  .cra_flags = CRYPTO_ALG_ASYNC |
 					       CRYPTO_ALG_NEED_FALLBACK,
 				  .cra_blocksize = SHA1_BLOCK_SIZE,
-				  .cra_ctxsize = sizeof(struct rk_ahash_ctx),
+				  .cra_ctxsize = sizeof(struct gemini_ahash_ctx),
 				  .cra_alignmask = 3,
-				  .cra_init = rk_cra_hash_init,
-				  .cra_exit = rk_cra_hash_exit,
+				  .cra_init = gemini_cra_hash_init,
+				  .cra_exit = gemini_cra_hash_exit,
 				  .cra_module = THIS_MODULE,
 				  }
 			 }
 	}
 };
 
-struct rk_crypto_tmp rk_ahash_sha256 = {
+struct gemini_crypto_tmp gemini_ahash_sha256 = {
 	.type = ALG_TYPE_HASH,
 	.alg.hash = {
-		.init = rk_ahash_init,
-		.update = rk_ahash_update,
-		.final = rk_ahash_final,
-		.finup = rk_ahash_finup,
-		.export = rk_ahash_export,
-		.import = rk_ahash_import,
-		.digest = rk_ahash_digest,
+		.init = gemini_ahash_init,
+		.update = gemini_ahash_update,
+		.final = gemini_ahash_final,
+		.finup = gemini_ahash_finup,
+		.export = gemini_ahash_export,
+		.import = gemini_ahash_import,
+		.digest = gemini_ahash_digest,
 		.halg = {
 			 .digestsize = SHA256_DIGEST_SIZE,
 			 .statesize = sizeof(struct sha256_state),
@@ -364,26 +364,26 @@ struct rk_crypto_tmp rk_ahash_sha256 = {
 				  .cra_flags = CRYPTO_ALG_ASYNC |
 					       CRYPTO_ALG_NEED_FALLBACK,
 				  .cra_blocksize = SHA256_BLOCK_SIZE,
-				  .cra_ctxsize = sizeof(struct rk_ahash_ctx),
+				  .cra_ctxsize = sizeof(struct gemini_ahash_ctx),
 				  .cra_alignmask = 3,
-				  .cra_init = rk_cra_hash_init,
-				  .cra_exit = rk_cra_hash_exit,
+				  .cra_init = gemini_cra_hash_init,
+				  .cra_exit = gemini_cra_hash_exit,
 				  .cra_module = THIS_MODULE,
 				  }
 			 }
 	}
 };
 
-struct rk_crypto_tmp rk_ahash_md5 = {
+struct gemini_crypto_tmp gemini_ahash_md5 = {
 	.type = ALG_TYPE_HASH,
 	.alg.hash = {
-		.init = rk_ahash_init,
-		.update = rk_ahash_update,
-		.final = rk_ahash_final,
-		.finup = rk_ahash_finup,
-		.export = rk_ahash_export,
-		.import = rk_ahash_import,
-		.digest = rk_ahash_digest,
+		.init = gemini_ahash_init,
+		.update = gemini_ahash_update,
+		.final = gemini_ahash_final,
+		.finup = gemini_ahash_finup,
+		.export = gemini_ahash_export,
+		.import = gemini_ahash_import,
+		.digest = gemini_ahash_digest,
 		.halg = {
 			 .digestsize = MD5_DIGEST_SIZE,
 			 .statesize = sizeof(struct md5_state),
@@ -394,10 +394,10 @@ struct rk_crypto_tmp rk_ahash_md5 = {
 				  .cra_flags = CRYPTO_ALG_ASYNC |
 					       CRYPTO_ALG_NEED_FALLBACK,
 				  .cra_blocksize = SHA1_BLOCK_SIZE,
-				  .cra_ctxsize = sizeof(struct rk_ahash_ctx),
+				  .cra_ctxsize = sizeof(struct gemini_ahash_ctx),
 				  .cra_alignmask = 3,
-				  .cra_init = rk_cra_hash_init,
-				  .cra_exit = rk_cra_hash_exit,
+				  .cra_init = gemini_cra_hash_init,
+				  .cra_exit = gemini_cra_hash_exit,
 				  .cra_module = THIS_MODULE,
 				  }
 			}

@@ -181,7 +181,7 @@
 #define CRYPTO_WRITE(dev, offset, val)	  \
 		writel_relaxed((val), ((dev)->reg + (offset)))
 
-struct rk_crypto_info {
+struct gemini_crypto_info {
 	struct device			*dev;
 	struct clk			*aclk;
 	struct clk			*hclk;
@@ -213,35 +213,35 @@ struct rk_crypto_info {
 	dma_addr_t			addr_in;
 	dma_addr_t			addr_out;
 	bool				busy;
-	int (*start)(struct rk_crypto_info *dev);
-	int (*update)(struct rk_crypto_info *dev);
+	int (*start)(struct gemini_crypto_info *dev);
+	int (*update)(struct gemini_crypto_info *dev);
 	void (*complete)(struct crypto_async_request *base, int err);
-	int (*enable_clk)(struct rk_crypto_info *dev);
-	void (*disable_clk)(struct rk_crypto_info *dev);
-	int (*load_data)(struct rk_crypto_info *dev,
+	int (*enable_clk)(struct gemini_crypto_info *dev);
+	void (*disable_clk)(struct gemini_crypto_info *dev);
+	int (*load_data)(struct gemini_crypto_info *dev,
 			 struct scatterlist *sg_src,
 			 struct scatterlist *sg_dst);
-	void (*unload_data)(struct rk_crypto_info *dev);
-	int (*enqueue)(struct rk_crypto_info *dev,
+	void (*unload_data)(struct gemini_crypto_info *dev);
+	int (*enqueue)(struct gemini_crypto_info *dev,
 		       struct crypto_async_request *async_req);
 };
 
 /* the private variable of hash */
-struct rk_ahash_ctx {
-	struct rk_crypto_info		*dev;
+struct gemini_ahash_ctx {
+	struct gemini_crypto_info		*dev;
 	/* for fallback */
 	struct crypto_ahash		*fallback_tfm;
 };
 
 /* the privete variable of hash for fallback */
-struct rk_ahash_rctx {
+struct gemini_ahash_rctx {
 	struct ahash_request		fallback_req;
 	u32				mode;
 };
 
 /* the private variable of cipher */
-struct rk_cipher_ctx {
-	struct rk_crypto_info		*dev;
+struct gemini_cipher_ctx {
+	struct gemini_crypto_info		*dev;
 	unsigned int			keylen;
 	u32				mode;
 };
@@ -251,8 +251,8 @@ enum alg_type {
 	ALG_TYPE_CIPHER,
 };
 
-struct rk_crypto_tmp {
-	struct rk_crypto_info		*dev;
+struct gemini_crypto_tmp {
+	struct gemini_crypto_info		*dev;
 	union {
 		struct crypto_alg	crypto;
 		struct ahash_alg	hash;
@@ -260,15 +260,15 @@ struct rk_crypto_tmp {
 	enum alg_type			type;
 };
 
-extern struct rk_crypto_tmp rk_ecb_aes_alg;
-extern struct rk_crypto_tmp rk_cbc_aes_alg;
-extern struct rk_crypto_tmp rk_ecb_des_alg;
-extern struct rk_crypto_tmp rk_cbc_des_alg;
-extern struct rk_crypto_tmp rk_ecb_des3_ede_alg;
-extern struct rk_crypto_tmp rk_cbc_des3_ede_alg;
+extern struct gemini_crypto_tmp gemini_ecb_aes_alg;
+extern struct gemini_crypto_tmp gemini_cbc_aes_alg;
+extern struct gemini_crypto_tmp gemini_ecb_des_alg;
+extern struct gemini_crypto_tmp gemini_cbc_des_alg;
+extern struct gemini_crypto_tmp gemini_ecb_des3_ede_alg;
+extern struct gemini_crypto_tmp gemini_cbc_des3_ede_alg;
 
-extern struct rk_crypto_tmp rk_ahash_sha1;
-extern struct rk_crypto_tmp rk_ahash_sha256;
-extern struct rk_crypto_tmp rk_ahash_md5;
+extern struct gemini_crypto_tmp gemini_ahash_sha1;
+extern struct gemini_crypto_tmp gemini_ahash_sha256;
+extern struct gemini_crypto_tmp gemini_ahash_md5;
 
 #endif
