@@ -323,7 +323,7 @@ define KernelPackage/crypto-hw-cortina
   KCONFIG:= \
 	CONFIG_CRYPTO_HW=y \
 	CONFIG_CRYPTO_DEV_CORTINA
-  FILES:=$(LINUX_DIR)/drivers/crypto/cortina-crypto.ko
+  FILES:=$(LINUX_DIR)/drivers/crypto/cortina/cortina-crypto.ko
   AUTOLOAD:=$(call AutoLoad,09,cortina-crypto)
   $(call AddDepends/crypto)
 endef
