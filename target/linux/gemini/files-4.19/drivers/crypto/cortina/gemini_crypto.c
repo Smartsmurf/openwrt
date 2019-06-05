@@ -12,14 +12,15 @@
  * Some ideas are from Rockwell driver.
  */
 
-#include "gemini_crypto.h"
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/of.h>
 #include <linux/clk.h>
 #include <linux/crypto.h>
 #include <linux/reset.h>
+#include "gemini_crypto.h"
 
+#if 0
 static int gemini_crypto_enable_clk(struct gemini_crypto_info *dev)
 {
 	int err;
@@ -233,30 +234,18 @@ static void gemini_crypto_queue_task_cb(unsigned long data)
 		dev->complete(dev->async_req, err);
 }
 
-static void gemini_crypto_done_task_cb(unsigned long data)
-{
-	struct gemini_crypto_info *dev = (struct gemini_crypto_info *)data;
-
-	if (dev->err) {
-		dev->complete(dev->async_req, dev->err);
-		return;
-	}
-
-	dev->err = dev->update(dev);
-	if (dev->err)
-		dev->complete(dev->async_req, dev->err);
-}
+#endif
 
 static struct gemini_crypto_tmp *gemini_cipher_algs[] = {
 	&gemini_ecb_aes_alg,
-	&gemini_cbc_aes_alg,
+/*	&gemini_cbc_aes_alg,
 	&gemini_ecb_des_alg,
 	&gemini_cbc_des_alg,
 	&gemini_ecb_des3_ede_alg,
 	&gemini_cbc_des3_ede_alg,
 	&gemini_ahash_sha1,
 	&gemini_ahash_sha256,
-	&gemini_ahash_md5,
+	&gemini_ahash_md5, */
 };
 
 static int gemini_crypto_register(struct gemini_crypto_info *crypto_info)
@@ -287,30 +276,38 @@ err_cipher_algs:
 	return err;
 }
 
+static void gemini_crypto_done_task_cb(unsigned long data)
+{
+	struct gemini_crypto_info *dev = (struct gemini_crypto_info *)data;
+
+//	if (dev->err) {
+//		dev->complete(dev->async_req, dev->err);
+//		return;
+//	}
+
+//	dev->err = dev->update(dev);
+//	if (dev->err)
+//		dev->complete(dev->async_req, dev->err);
+}
+
 static void gemini_crypto_unregister(void)
 {
 	unsigned int i;
 
-	for (i = 0; i < ARRAY_SIZE(gemini_cipher_algs); i++) {
-		if (gemini_cipher_algs[i]->type == ALG_TYPE_CIPHER)
-			crypto_unregister_alg(&gemini_cipher_algs[i]->alg.crypto);
-		else
-			crypto_unregister_ahash(&gemini_cipher_algs[i]->alg.hash);
-	}
+//	for (i = 0; i < ARRAY_SIZE(gemini_cipher_algs); i++) {
+//		if (gemini_cipher_algs[i]->type == ALG_TYPE_CIPHER)
+//			crypto_unregister_alg(&gemini_cipher_algs[i]->alg.crypto);
+//		else
+//			crypto_unregister_ahash(&gemini_cipher_algs[i]->alg.hash);
+//	}
 }
 
 static void gemini_crypto_action(void *data)
 {
-	struct gemini_crypto_info *crypto_info = data;
+//	struct gemini_crypto_info *crypto_info = data;
 
-	reset_control_assert(crypto_info->rst);
+//	reset_control_assert(crypto_info->rst);
 }
-
-static const struct of_device_id crypto_of_id_table[] = {
-	{ .compatible = "cortina-crypto" },
-	{}
-};
-MODULE_DEVICE_TABLE(of, crypto_of_id_table);
 
 static int gemini_crypto_probe(struct platform_device *pdev)
 {
@@ -326,53 +323,22 @@ static int gemini_crypto_probe(struct platform_device *pdev)
 		goto err_crypto;
 	}
 
-	crypto_info->rst = devm_reset_control_get(dev, "crypto-rst");
-	if (IS_ERR(crypto_info->rst)) {
-		err = PTR_ERR(crypto_info->rst);
-		goto err_crypto;
-	}
 
-	reset_control_assert(crypto_info->rst);
-	usleep_range(10, 20);
-	reset_control_deassert(crypto_info->rst);
-
+/*
 	err = devm_add_action_or_reset(dev, gemini_crypto_action, crypto_info);
 	if (err)
 		goto err_crypto;
+*/
 
 	spin_lock_init(&crypto_info->lock);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	crypto_info->reg = devm_ioremap_resource(&pdev->dev, res);
-	if (IS_ERR(crypto_info->reg)) {
-		err = PTR_ERR(crypto_info->reg);
+	crypto_info->base = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(crypto_info->base)) {
+		err = PTR_ERR(crypto_info->base);
 		goto err_crypto;
 	}
-
-	crypto_info->aclk = devm_clk_get(&pdev->dev, "aclk");
-	if (IS_ERR(crypto_info->aclk)) {
-		err = PTR_ERR(crypto_info->aclk);
-		goto err_crypto;
-	}
-
-	crypto_info->hclk = devm_clk_get(&pdev->dev, "hclk");
-	if (IS_ERR(crypto_info->hclk)) {
-		err = PTR_ERR(crypto_info->hclk);
-		goto err_crypto;
-	}
-
-	crypto_info->sclk = devm_clk_get(&pdev->dev, "sclk");
-	if (IS_ERR(crypto_info->sclk)) {
-		err = PTR_ERR(crypto_info->sclk);
-		goto err_crypto;
-	}
-
-	crypto_info->dmaclk = devm_clk_get(&pdev->dev, "apb_pclk");
-	if (IS_ERR(crypto_info->dmaclk)) {
-		err = PTR_ERR(crypto_info->dmaclk);
-		goto err_crypto;
-	}
-
+/*
 	crypto_info->irq = platform_get_irq(pdev, 0);
 	if (crypto_info->irq < 0) {
 		dev_warn(crypto_info->dev,
@@ -389,22 +355,19 @@ static int gemini_crypto_probe(struct platform_device *pdev)
 		dev_err(crypto_info->dev, "irq request failed.\n");
 		goto err_crypto;
 	}
+*/
 
-	crypto_info->dev = &pdev->dev;
-	platform_set_drvdata(pdev, crypto_info);
-
-	tasklet_init(&crypto_info->queue_task,
-		     gemini_crypto_queue_task_cb, (unsigned long)crypto_info);
-	tasklet_init(&crypto_info->done_task,
+	/* Hardcoded Clk at the moment
+	crypto_info->clk = devm_clk_get(dev, "crypto");
+			if (IS_ERR(mtk->clk)) {
+				mtk->clk = NULL;
+				dev_err(dev, "Could not find clock\n");
+			}
+	*/
+	crypto_info->clk = NULL;
+	tasklet_init(&crypto_info->done_tasklet,
 		     gemini_crypto_done_task_cb, (unsigned long)crypto_info);
-	crypto_init_queue(&crypto_info->queue, 50);
-
-	crypto_info->enable_clk = gemini_crypto_enable_clk;
-	crypto_info->disable_clk = gemini_crypto_disable_clk;
-	crypto_info->load_data = gemini_load_data;
-	crypto_info->unload_data = gemini_unload_data;
-	crypto_info->enqueue = gemini_crypto_enqueue;
-	crypto_info->busy = false;
+//	crypto_init_queue(&crypto_info->queue, 50);
 
 	err = gemini_crypto_register(crypto_info);
 	if (err) {
@@ -412,25 +375,38 @@ static int gemini_crypto_probe(struct platform_device *pdev)
 		goto err_register_alg;
 	}
 
+	crypto_info->dev = &pdev->dev;
+	platform_set_drvdata(pdev, crypto_info);
+
 	dev_info(dev, "Crypto Accelerator successfully registered\n");
 	return 0;
 
 err_register_alg:
-	tasklet_kill(&crypto_info->queue_task);
-	tasklet_kill(&crypto_info->done_task);
+	tasklet_kill(&crypto_info->done_tasklet);
 err_crypto:
 	return err;
 }
 
-static int gemini_crypto_remove(struct platform_device *pdev)
+static int __exit gemini_crypto_remove(struct platform_device *pdev)
 {
 	struct gemini_crypto_info *crypto_tmp = platform_get_drvdata(pdev);
 
+	if (!crypto_tmp)
+		return -ENODEV;
+
 	gemini_crypto_unregister();
-	tasklet_kill(&crypto_tmp->done_task);
-	tasklet_kill(&crypto_tmp->queue_task);
+	tasklet_kill(&crypto_tmp->done_tasklet);
+	dev_info(crypto_tmp->dev, "Unloaded.\n");
+	platform_set_drvdata(pdev, NULL);
+
 	return 0;
 }
+
+static const struct of_device_id crypto_of_id_table[] = {
+	{ .compatible = "cortina-crypto" },
+	{}
+};
+MODULE_DEVICE_TABLE(of, crypto_of_id_table);
 
 static struct platform_driver crypto_driver = {
 	.probe		= gemini_crypto_probe,

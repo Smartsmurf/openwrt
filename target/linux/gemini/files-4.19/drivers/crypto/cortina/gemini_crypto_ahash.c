@@ -1,15 +1,15 @@
 /*
- * Crypto acceleration support for Rockchip RK3288
+ * Crypto acceleration support for Cortina Gemini SoC
  *
- * Copyright (c) 2015, Fuzhou Rockchip Electronics Co., Ltd
+ * Copyright (c) 2019, Andreas Fiedler
  *
- * Author: Zain Wang <zain.wang@rock-chips.com>
+ * Author: Andreas Fiedler <andreas.fiedler@gmx.net>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
  * version 2, as published by the Free Software Foundation.
  *
- * Some ideas are from marvell/cesa.c and s5p-sss.c driver.
+ * Some ideas are from Rockwell driver.
  */
 #include "gemini_crypto.h"
 
@@ -18,6 +18,7 @@
  * so we put the fixed hash out when met zero message.
  */
 
+#if 0
 static int zero_message_process(struct ahash_request *req)
 {
 	struct crypto_ahash *tfm = crypto_ahash_reqtfm(req);
@@ -403,3 +404,4 @@ struct gemini_crypto_tmp gemini_ahash_md5 = {
 			}
 	}
 };
+#endif // 0

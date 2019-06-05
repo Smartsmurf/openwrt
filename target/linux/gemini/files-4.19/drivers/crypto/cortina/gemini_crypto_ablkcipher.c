@@ -1,15 +1,15 @@
 /*
- * Crypto acceleration support for Rockchip RK3288
+ * Crypto acceleration support for Cortina Gemini SoC
  *
- * Copyright (c) 2015, Fuzhou Rockchip Electronics Co., Ltd
+ * Copyright (c) 2019, Andreas Fiedler
  *
- * Author: Zain Wang <zain.wang@rock-chips.com>
+ * Author: Andreas Fiedler <andreas.fiedler@gmx.net>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
  * version 2, as published by the Free Software Foundation.
  *
- * Some ideas are from marvell-cesa.c and s5p-sss.c driver.
+ * Some ideas are from Rockwell driver.
  */
 #include "gemini_crypto.h"
 
@@ -17,22 +17,23 @@
 
 static void gemini_crypto_complete(struct crypto_async_request *base, int err)
 {
-	if (base->complete)
-		base->complete(base, err);
+//	if (base->complete)
+//		base->complete(base, err);
 }
 
 static int gemini_handle_req(struct gemini_crypto_info *dev,
 			 struct ablkcipher_request *req)
 {
-	if (!IS_ALIGNED(req->nbytes, dev->align_size))
-		return -EINVAL;
-	else
-		return dev->enqueue(dev, &req->base);
+//	if (!IS_ALIGNED(req->nbytes, dev->align_size))
+//		return -EINVAL;
+//	else
+//		return dev->enqueue(dev, &req->base);
 }
 
 static int gemini_aes_setkey(struct crypto_ablkcipher *cipher,
 			 const u8 *key, unsigned int keylen)
 {
+/*
 	struct crypto_tfm *tfm = crypto_ablkcipher_tfm(cipher);
 	struct gemini_cipher_ctx *ctx = crypto_tfm_ctx(tfm);
 
@@ -43,12 +44,14 @@ static int gemini_aes_setkey(struct crypto_ablkcipher *cipher,
 	}
 	ctx->keylen = keylen;
 	memcpy_toio(ctx->dev->reg + RK_CRYPTO_AES_KEY_0, key, keylen);
+*/
 	return 0;
 }
 
 static int gemini_tdes_setkey(struct crypto_ablkcipher *cipher,
 			  const u8 *key, unsigned int keylen)
 {
+/*
 	struct crypto_tfm *tfm = crypto_ablkcipher_tfm(cipher);
 	struct gemini_cipher_ctx *ctx = crypto_tfm_ctx(tfm);
 	u32 tmp[DES_EXPKEY_WORDS];
@@ -68,56 +71,67 @@ static int gemini_tdes_setkey(struct crypto_ablkcipher *cipher,
 
 	ctx->keylen = keylen;
 	memcpy_toio(ctx->dev->reg + RK_CRYPTO_TDES_KEY1_0, key, keylen);
+*/
 	return 0;
 }
 
 static int gemini_aes_ecb_encrypt(struct ablkcipher_request *req)
 {
+/*
 	struct crypto_ablkcipher *tfm = crypto_ablkcipher_reqtfm(req);
 	struct gemini_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
 	struct gemini_crypto_info *dev = ctx->dev;
 
 	ctx->mode = RK_CRYPTO_AES_ECB_MODE;
+*/
 	return gemini_handle_req(dev, req);
 }
 
 static int gemini_aes_ecb_decrypt(struct ablkcipher_request *req)
 {
+/*
 	struct crypto_ablkcipher *tfm = crypto_ablkcipher_reqtfm(req);
 	struct gemini_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
 	struct gemini_crypto_info *dev = ctx->dev;
 
 	ctx->mode = RK_CRYPTO_AES_ECB_MODE | RK_CRYPTO_DEC;
+*/
 	return gemini_handle_req(dev, req);
 }
 
 static int gemini_aes_cbc_encrypt(struct ablkcipher_request *req)
 {
+/*
 	struct crypto_ablkcipher *tfm = crypto_ablkcipher_reqtfm(req);
 	struct gemini_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
 	struct gemini_crypto_info *dev = ctx->dev;
 
 	ctx->mode = RK_CRYPTO_AES_CBC_MODE;
+*/
 	return gemini_handle_req(dev, req);
 }
 
 static int gemini_aes_cbc_decrypt(struct ablkcipher_request *req)
 {
+/*
 	struct crypto_ablkcipher *tfm = crypto_ablkcipher_reqtfm(req);
 	struct gemini_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
 	struct gemini_crypto_info *dev = ctx->dev;
 
 	ctx->mode = RK_CRYPTO_AES_CBC_MODE | RK_CRYPTO_DEC;
+*/
 	return gemini_handle_req(dev, req);
 }
 
 static int gemini_des_ecb_encrypt(struct ablkcipher_request *req)
 {
+/*
 	struct crypto_ablkcipher *tfm = crypto_ablkcipher_reqtfm(req);
 	struct gemini_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
 	struct gemini_crypto_info *dev = ctx->dev;
 
 	ctx->mode = 0;
+*/
 	return gemini_handle_req(dev, req);
 }
 
