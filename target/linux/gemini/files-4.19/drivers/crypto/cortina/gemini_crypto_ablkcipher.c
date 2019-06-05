@@ -13,6 +13,7 @@
  */
 #include "gemini_crypto.h"
 
+#if 0
 #define RK_CRYPTO_DEC			BIT(0)
 
 static void gemini_crypto_complete(struct crypto_async_request *base, int err)
@@ -341,8 +342,11 @@ out_rx:
 	return err;
 }
 
+#endif // 0
+
 static int gemini_ablk_cra_init(struct crypto_tfm *tfm)
 {
+/*
 	struct gemini_cipher_ctx *ctx = crypto_tfm_ctx(tfm);
 	struct crypto_alg *alg = tfm->__crt_alg;
 	struct gemini_crypto_tmp *algt;
@@ -357,15 +361,19 @@ static int gemini_ablk_cra_init(struct crypto_tfm *tfm)
 	ctx->dev->addr_vir = (char *)__get_free_page(GFP_KERNEL);
 
 	return ctx->dev->addr_vir ? ctx->dev->enable_clk(ctx->dev) : -ENOMEM;
+*/
 }
 
 static void gemini_ablk_cra_exit(struct crypto_tfm *tfm)
 {
+/*
 	struct gemini_cipher_ctx *ctx = crypto_tfm_ctx(tfm);
 
 	free_page((unsigned long)ctx->dev->addr_vir);
 	ctx->dev->disable_clk(ctx->dev);
+*/
 }
+
 
 struct gemini_crypto_tmp gemini_ecb_aes_alg = {
 	.type = ALG_TYPE_CIPHER,
@@ -385,9 +393,9 @@ struct gemini_crypto_tmp gemini_ecb_aes_alg = {
 		.cra_u.ablkcipher	= {
 			.min_keysize	= AES_MIN_KEY_SIZE,
 			.max_keysize	= AES_MAX_KEY_SIZE,
-			.setkey		= gemini_aes_setkey,
-			.encrypt	= gemini_aes_ecb_encrypt,
-			.decrypt	= gemini_aes_ecb_decrypt,
+//			.setkey		= gemini_aes_setkey,
+//			.encrypt	= gemini_aes_ecb_encrypt,
+//			.decrypt	= gemini_aes_ecb_decrypt,
 		}
 	}
 };
@@ -411,13 +419,13 @@ struct gemini_crypto_tmp gemini_cbc_aes_alg = {
 			.min_keysize	= AES_MIN_KEY_SIZE,
 			.max_keysize	= AES_MAX_KEY_SIZE,
 			.ivsize		= AES_BLOCK_SIZE,
-			.setkey		= gemini_aes_setkey,
-			.encrypt	= gemini_aes_cbc_encrypt,
-			.decrypt	= gemini_aes_cbc_decrypt,
+//			.setkey		= gemini_aes_setkey,
+//			.encrypt	= gemini_aes_cbc_encrypt,
+//			.decrypt	= gemini_aes_cbc_decrypt,
 		}
 	}
 };
-
+/*
 struct gemini_crypto_tmp gemini_ecb_des_alg = {
 	.type = ALG_TYPE_CIPHER,
 	.alg.crypto = {
@@ -520,3 +528,4 @@ struct gemini_crypto_tmp gemini_cbc_des3_ede_alg = {
 		}
 	}
 };
+*/

@@ -227,6 +227,32 @@ struct gemini_crypto_info {
 		       struct crypto_async_request *async_req);
 };
 
+
+
+#endif // 0
+
+struct gemini_crypto_info {
+	void __iomem			*base;
+	struct device			*dev;
+	struct clk			*clk;
+	int				irq;
+
+	struct aes_txdesc		*tx;
+	struct aes_rxdesc		*rx;
+	dma_addr_t			phy_tx;
+	dma_addr_t			phy_rx;
+	dma_addr_t			phy_rec;
+
+	struct list_head		aes_list;
+
+	struct tasklet_struct		done_tasklet;
+	unsigned int			rec_front_idx;
+	unsigned int			rec_rear_idx;
+	struct mtk_dma_rec		*rec;
+	spinlock_t			lock;
+	unsigned int			count;
+};
+
 /* the private variable of hash */
 struct gemini_ahash_ctx {
 	struct gemini_crypto_info		*dev;
@@ -234,7 +260,7 @@ struct gemini_ahash_ctx {
 	struct crypto_ahash		*fallback_tfm;
 };
 
-/* the privete variable of hash for fallback */
+/* the private variable of hash for fallback */
 struct gemini_ahash_rctx {
 	struct ahash_request		fallback_req;
 	u32				mode;
@@ -271,28 +297,5 @@ extern struct gemini_crypto_tmp gemini_cbc_des3_ede_alg;
 extern struct gemini_crypto_tmp gemini_ahash_sha1;
 extern struct gemini_crypto_tmp gemini_ahash_sha256;
 extern struct gemini_crypto_tmp gemini_ahash_md5;
-#endif // 0
-
-struct gemini_crypto_info {
-	void __iomem			*base;
-	struct device			*dev;
-	struct clk			*clk;
-	int				irq;
-
-	struct aes_txdesc		*tx;
-	struct aes_rxdesc		*rx;
-	dma_addr_t			phy_tx;
-	dma_addr_t			phy_rx;
-	dma_addr_t			phy_rec;
-
-	struct list_head		aes_list;
-
-	struct tasklet_struct		done_tasklet;
-	unsigned int			rec_front_idx;
-	unsigned int			rec_rear_idx;
-	struct mtk_dma_rec		*rec;
-	spinlock_t			lock;
-	unsigned int			count;
-};
 
 #endif

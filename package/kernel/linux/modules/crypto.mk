@@ -317,6 +317,21 @@ endef
 $(eval $(call KernelPackage,crypto-hw-geode))
 
 
+define KernelPackage/crypto-hw-cortina
+  TITLE:=Cortina Gemini hardware crypto module
+  DEPENDS:=+kmod-crypto-manager
+  KCONFIG:= \
+	CONFIG_CRYPTO_HW=y \
+	CONFIG_CRYPTO_DEV_CORTINA
+  FILES:=$(LINUX_DIR)/drivers/crypto/cortina-crypto.ko
+  AUTOLOAD:=$(call AutoLoad,09,cortina-crypto)
+  $(call AddDepends/crypto)
+endef
+
+$(eval $(call KernelPackage,crypto-hw-cortina))
+
+
+
 define KernelPackage/crypto-hw-hifn-795x
   TITLE:=HIFN 795x crypto accelerator
   DEPENDS:=+kmod-random-core +kmod-crypto-manager
