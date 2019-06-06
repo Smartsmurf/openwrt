@@ -12,6 +12,19 @@
 #include <crypto/md5.h>
 #include <crypto/sha.h>
 
+/* Cortina crypto registers */
+#define CRYPTO_ID            0x0000
+#define CRYPTO_CTRL          0x0004
+#define CRYPTO_PACKET_PARAM  0x0008
+#define CRYPTO_AUTH_PARAM    0x000C
+#define CRYPTO_CIPHER_PARAM  0x0010
+#define CRYPTO_AUTH_KEY_CHK  0x00A7
+#define CRYPTO_STATUS_REG    0x00A8
+#define CRYPTO_RAND_NUM_REG  0x00AC
+#define CRYPTO_FRAME_CHKSUM  0x00B0
+
+
+
 #if 0
 #define _SBF(v, f)			((v) << (f))
 

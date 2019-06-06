@@ -315,6 +315,7 @@ static int gemini_crypto_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct gemini_crypto_info *crypto_info;
 	int err = 0;
+	u32 reg;
 
 	crypto_info = devm_kzalloc(&pdev->dev,
 				   sizeof(*crypto_info), GFP_KERNEL);
@@ -322,7 +323,6 @@ static int gemini_crypto_probe(struct platform_device *pdev)
 		err = -ENOMEM;
 		goto err_crypto;
 	}
-
 
 /*
 	err = devm_add_action_or_reset(dev, gemini_crypto_action, crypto_info);
@@ -365,6 +365,7 @@ static int gemini_crypto_probe(struct platform_device *pdev)
 			}
 	*/
 	crypto_info->clk = NULL;
+
 	tasklet_init(&crypto_info->done_tasklet,
 		     gemini_crypto_done_task_cb, (unsigned long)crypto_info);
 //	crypto_init_queue(&crypto_info->queue, 50);
@@ -378,7 +379,8 @@ static int gemini_crypto_probe(struct platform_device *pdev)
 	crypto_info->dev = &pdev->dev;
 	platform_set_drvdata(pdev, crypto_info);
 
-	dev_info(dev, "Crypto Accelerator successfully registered\n");
+	reg = readl(crypto_info->base + CRYPTO_ID);
+	dev_info(dev, "Crypto Accelerator (ID 0x%08x) successfully registered\n", reg);
 	return 0;
 
 err_register_alg:
