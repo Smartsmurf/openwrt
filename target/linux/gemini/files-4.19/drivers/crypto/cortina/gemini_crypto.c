@@ -166,24 +166,6 @@ static void gemini_unload_data(struct gemini_crypto_info *dev)
 	}
 }
 
-static irqreturn_t gemini_crypto_irq_handle(int irq, void *dev_id)
-{
-	struct gemini_crypto_info *dev  = platform_get_drvdata(dev_id);
-	u32 interrupt_status;
-
-	spin_lock(&dev->lock);
-/*	interrupt_status = CRYPTO_READ(dev, gemini_crypto_INTSTS);
-	CRYPTO_WRITE(dev, gemini_crypto_INTSTS, interrupt_status);
-
-	if (interrupt_status & 0x0a) {
-		dev_warn(dev->dev, "DMA Error\n");
-		dev->err = -EFAULT;
-	}
-	tasklet_schedule(&dev->done_task);
-*/
-	spin_unlock(&dev->lock);
-	return IRQ_HANDLED;
-}
 
 static int gemini_crypto_enqueue(struct gemini_crypto_info *dev,
 			      struct crypto_async_request *async_req)
@@ -235,6 +217,66 @@ static void gemini_crypto_queue_task_cb(unsigned long data)
 }
 
 #endif
+
+static void gemini_crypto_write_reg(void __iomem *addr,unsigned int data,unsigned int bit_mask)
+{
+	volatile unsigned int reg_val;
+	reg_val = ( readl(addr) & (~bit_mask) ) | (data & bit_mask);
+	writel(reg_val,addr);
+}	
+
+static irqreturn_t gemini_crypto_irq_handle(int irq, void *dev_id)
+{
+	struct gemini_crypto_info *dev  = platform_get_drvdata(dev_id);
+	CRYPTO_DMA_STATUS_T	status;
+
+	/* read DMA status */
+	status.bits32 = readl(dev->base + CRYPTO_DMA_STATUS);
+
+	/* clear DMA status */
+	gemini_crypto_write_reg(dev->base + CRYPTO_DMA_STATUS,status.bits32,status.bits32);
+
+	if ((status.bits32 & 0x63000000) > 0)
+	{
+		if (status.bits.ts_derr==1)
+		{
+			dev_err(dev->dev, "AHB bus error while Tx.\n");
+		}
+		if (status.bits.ts_perr==1)
+		{
+			dev_err(dev->dev, "Tx descriptor protocol error.\n");
+		}    
+		if (status.bits.rs_derr==1)
+		{
+			dev_err(dev->dev, "AHB bus error while Rx.\n");
+		}
+		if (status.bits.rs_perr==1)
+		{
+			dev_err(dev->dev, "Rx descriptor protocol error.\n");         
+		} 
+	}
+
+	tasklet_schedule(&dev->done_tasklet);
+
+	return IRQ_HANDLED;
+/*
+	struct gemini_crypto_info *dev  = platform_get_drvdata(dev_id);
+	u32 interrupt_status;
+
+	spin_lock(&dev->lock);
+	interrupt_status = CRYPTO_READ(dev, gemini_crypto_INTSTS);
+	CRYPTO_WRITE(dev, gemini_crypto_INTSTS, interrupt_status);
+
+	if (interrupt_status & 0x0a) {
+		dev_warn(dev->dev, "DMA Error\n");
+		dev->err = -EFAULT;
+	}
+	tasklet_schedule(&dev->done_task);
+
+	spin_unlock(&dev->lock);
+	return IRQ_HANDLED;
+*/
+}
 
 static struct gemini_crypto_tmp *gemini_cipher_algs[] = {
 	&gemini_ecb_aes_alg,
@@ -294,12 +336,12 @@ static void gemini_crypto_unregister(void)
 {
 	unsigned int i;
 
-//	for (i = 0; i < ARRAY_SIZE(gemini_cipher_algs); i++) {
-//		if (gemini_cipher_algs[i]->type == ALG_TYPE_CIPHER)
-//			crypto_unregister_alg(&gemini_cipher_algs[i]->alg.crypto);
-//		else
-//			crypto_unregister_ahash(&gemini_cipher_algs[i]->alg.hash);
-//	}
+	for (i = 0; i < ARRAY_SIZE(gemini_cipher_algs); i++) {
+		if (gemini_cipher_algs[i]->type == ALG_TYPE_CIPHER)
+			crypto_unregister_alg(&gemini_cipher_algs[i]->alg.crypto);
+		else
+			crypto_unregister_ahash(&gemini_cipher_algs[i]->alg.hash);
+	}
 }
 
 static void gemini_crypto_action(void *data)
@@ -338,33 +380,29 @@ static int gemini_crypto_probe(struct platform_device *pdev)
 		err = PTR_ERR(crypto_info->base);
 		goto err_crypto;
 	}
-/*
+
 	crypto_info->irq = platform_get_irq(pdev, 0);
 	if (crypto_info->irq < 0) {
 		dev_warn(crypto_info->dev,
-			 "control Interrupt is not available.\n");
+			 "crypto interrupt is not available.\n");
 		err = crypto_info->irq;
 		goto err_crypto;
 	}
 
 	err = devm_request_irq(&pdev->dev, crypto_info->irq,
 			       gemini_crypto_irq_handle, IRQF_SHARED,
-			       "rk-crypto", pdev);
-
+			       "cortina-crypto", pdev);
 	if (err) {
 		dev_err(crypto_info->dev, "irq request failed.\n");
 		goto err_crypto;
 	}
-*/
 
-	/* Hardcoded Clk at the moment
-	crypto_info->clk = devm_clk_get(dev, "crypto");
-			if (IS_ERR(mtk->clk)) {
-				mtk->clk = NULL;
-				dev_err(dev, "Could not find clock\n");
-			}
-	*/
-	crypto_info->clk = NULL;
+	crypto_info->pclk = devm_clk_get(dev, "PCLK");
+	if (IS_ERR(crypto_info->pclk)) {
+		crypto_info->pclk = NULL;
+		dev_err(dev, "no PCLK\n");
+	}
+	// crypto_info->clk = NULL;
 
 	tasklet_init(&crypto_info->done_tasklet,
 		     gemini_crypto_done_task_cb, (unsigned long)crypto_info);

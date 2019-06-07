@@ -1,0 +1,32 @@
+--- a/arch/arm/boot/dts/gemini.dtsi	2019-06-06 14:00:03.500440000 +0200
++++ b/arch/arm/boot/dts/gemini.dtsi	2019-06-07 10:29:44.859232214 +0200
+@@ -321,6 +321,16 @@
+ 			};
+ 		};
+ 
++		crypto@51000000 {
++			compatible = "cortina,gemini-crypto";
++			reg = <0x51000000 0x10000>;
++			interrupts = <7 IRQ_TYPE_LEVEL_HIGH>;
++			resets = <&syscon GEMINI_RESET_SECURITY>;
++			clocks = <&syscon GEMINI_CLK_APB>;
++			clock-names = "PCLK";
++			status = "disabled";
++		};
++
+ 		ethernet@60000000 {
+ 			compatible = "cortina,gemini-ethernet";
+ 			reg = <0x60000000 0x4000>, /* Global registers, queue */
+--- a/arch/arm/boot/dts/gemini-nas4220b.dts	2019-06-06 14:00:03.528442000 +0200
++++ b/arch/arm/boot/dts/gemini-nas4220b.dts	2019-06-07 10:30:37.362889100 +0200
+@@ -234,6 +234,10 @@
+ 				<0x6000 0 0 4 &pci_intc 2>;
+ 		};
+ 
++		crypto@51000000 {
++			status = "okay";
++		};
++
+ 		usb@68000000 {
+ 			status = "okay";
+ 		};

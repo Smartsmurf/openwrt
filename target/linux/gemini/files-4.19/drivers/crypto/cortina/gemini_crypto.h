@@ -23,6 +23,317 @@
 #define CRYPTO_RAND_NUM_REG  0x00AC
 #define CRYPTO_FRAME_CHKSUM  0x00B0
 
+/************************************************/
+/*          the offset of DMA register          */
+/************************************************/
+enum CRYPTO_DMA_REGISTER {
+	CRYPTO_DMA_DEVICE_ID	= 0xff00,
+	CRYPTO_DMA_STATUS	= 0xff04,
+	CRYPTO_TXDMA_CTRL 	= 0xff08,
+	CRYPTO_TXDMA_FIRST_DESC 	= 0xff0c,
+	CRYPTO_TXDMA_CURR_DESC	= 0xff10,
+	CRYPTO_RXDMA_CTRL	= 0xff14,
+	CRYPTO_RXDMA_FIRST_DESC	= 0xff18,
+	CRYPTO_RXDMA_CURR_DESC	= 0xff1c,
+	CRYPTO_TXDMA_BUF_ADDR    = 0xff28,
+	CRYPTO_RXDMA_BUF_ADDR    = 0xff38,
+	CRYPTO_RXDMA_BUF_SIZE	= 0xff30,
+};
+
+
+/******************************************************/
+/* the field definition of CRYPTO DMA Module Register  */
+/******************************************************/
+typedef union
+{
+	unsigned int bits32;
+	struct bit2_ff00
+	{
+		unsigned int revision_id	:  4;
+		unsigned int device_id		: 12;
+		unsigned int 				:  8;
+		unsigned int p_rclk 		:  4;	/* DMA_APB read clock period */
+		unsigned int p_wclk	    	:  4;	/* DMA_APB write clock period */
+	} bits;
+} CRYPTO_DMA_DEVICE_ID_T;
+
+typedef union
+{
+	unsigned int bits32;
+	struct bit2_ff04
+	{
+		unsigned int intr_enable    :  8;   /* Peripheral Interrupt Enable */
+		unsigned int loop_back		:  1;	/* loopback TxDMA to RxDMA */
+		unsigned int 				:  3;
+		unsigned int peri_reset    	:  1;   /* write 1 to this bit will cause DMA PClk domain soft reset */
+		unsigned int dma_reset 		:  1;	/* write 1 to this bit will cause DMA HClk domain soft reset */
+		unsigned int intr           :  8;   /* Peripheral interrupt */  
+		unsigned int rs_eofi		:  1;	/* RxDMA end of frame interrupt */
+		unsigned int rs_eodi		:  1;	/* RxDMA end of descriptor interrupt */
+		unsigned int rs_perr		:  1;   /* Rx Descriptor protocol error */
+		unsigned int rs_derr		:  1;   /* AHB Bus Error while rx */ 
+		unsigned int rs_finish		:  1;   /* finished rx interrupt */
+		unsigned int ts_eofi		:  1;   /* TxDMA end of frame interrupt */
+		unsigned int ts_eodi		:  1;	/* TxDMA end of descriptor interrupt */
+		unsigned int ts_perr		:  1;   /* Tx Descriptor protocol error */
+		unsigned int ts_derr		:  1;   /* AHB Bus Error while tx */ 
+		unsigned int ts_finish		:  1;	/* finished tx interrupt */
+	} bits;
+} CRYPTO_DMA_STATUS_T;
+
+typedef union
+{
+	unsigned int bits32;
+	struct bit2_ff08
+	{
+		unsigned int 				: 14;
+		unsigned int td_eof_en      :  1;   /* End of frame interrupt Enable;1-enable;0-mask */
+		unsigned int td_eod_en  	:  1;	/* End of Descriptor interrupt Enable;1-enable;0-mask */
+		unsigned int td_perr_en 	:  1;	/* Protocol Failure Interrupt Enable;1-enable;0-mask */
+		unsigned int td_fail_en 	:  1;	/* DMA Fail Interrupt Enable;1-enable;0-mask */
+		unsigned int td_finish_en   :  1;	/* DMA Finish Event Interrupt Enable;1-enable;0-mask */
+		unsigned int td_endian		:  1;	/* AHB Endian. 0-little endian; 1-big endian */
+		unsigned int td_bus		    :  2;	/* peripheral bus width;0 - 8 bits;1 - 16 bits */
+		unsigned int td_burst_size  :  2;	/* TxDMA max burst size for every AHB request */
+		unsigned int td_prot		:  4;	/* TxDMA protection control */
+		unsigned int 				:  1;
+		unsigned int td_chain_mode	:  1;	/* Descriptor Chain Mode;1-Descriptor Chain mode, 0-Direct DMA mode*/
+		unsigned int td_continue	:  1;   /* Continue DMA operation */
+		unsigned int td_start		:  1;	/* Start DMA transfer */
+	} bits;
+} CRYPTO_TXDMA_CTRL_T;
+				
+typedef union 
+{
+	unsigned int bits32;
+	struct bit2_ff0c
+	{
+		unsigned int 					:  3;
+		unsigned int td_busy			:  1;/* 1-TxDMA busy; 0-TxDMA idle */
+		unsigned int td_first_des_ptr	: 28;/* first descriptor address */
+	} bits;
+} CRYPTO_TXDMA_FIRST_DESC_T;					
+
+typedef union
+{
+	unsigned int bits32;
+	struct bit2_ff10
+	{
+		unsigned int sof_eof		:  2;
+		unsigned int dec			:  1;	/* AHB bus address increment(0)/decrement(1) */
+		unsigned int eofie			:  1;	/* end of frame interrupt enable */
+		unsigned int ndar			: 28;	/* next descriptor address */
+	} bits;
+} CRYPTO_TXDMA_CURR_DESC_T;
+			
+
+typedef union
+{
+	unsigned int bits32;
+	struct bit2_ff14
+	{
+		unsigned int 				: 14;
+		unsigned int rd_eof_en      :  1;   /* End of frame interrupt Enable;1-enable;0-mask */
+		unsigned int rd_eod_en  	:  1;	/* End of Descriptor interrupt Enable;1-enable;0-mask */
+		unsigned int rd_perr_en 	:  1;	/* Protocol Failure Interrupt Enable;1-enable;0-mask */
+		unsigned int rd_fail_en  	:  1;	/* DMA Fail Interrupt Enable;1-enable;0-mask */
+		unsigned int rd_finish_en   :  1;	/* DMA Finish Event Interrupt Enable;1-enable;0-mask */
+		unsigned int rd_endian		:  1;	/* AHB Endian. 0-little endian; 1-big endian */
+		unsigned int rd_bus		    :  2;	/* peripheral bus width;0 - 8 bits;1 - 16 bits */
+		unsigned int rd_burst_size  :  2;	/* DMA max burst size for every AHB request */
+		unsigned int rd_prot		:  4;	/* DMA protection control */
+		unsigned int 				:  1;
+		unsigned int rd_chain_mode	:  1;	/* Descriptor Chain Mode;1-Descriptor Chain mode, 0-Direct DMA mode*/
+		unsigned int rd_continue	:  1;   /* Continue DMA operation */
+		unsigned int rd_start		:  1;	/* Start DMA transfer */
+	} bits;
+} CRYPTO_RXDMA_CTRL_T;
+				
+typedef union 
+{
+	unsigned int bits32;
+	struct bit2_ff18
+	{
+		unsigned int 					:  3;
+		unsigned int rd_busy			:  1;/* 1-RxDMA busy; 0-RxDMA idle */
+		unsigned int rd_first_des_ptr	: 28;/* first descriptor address */
+	} bits;
+} CRYPTO_RXDMA_FIRST_DESC_T;					
+
+typedef union
+{
+	unsigned int bits32;
+	struct bit2_ff1c
+	{
+		unsigned int sof_eof		:  2;
+		unsigned int dec			:  1;	/* AHB bus address increment(0)/decrement(1) */
+		unsigned int eofie			:  1;	/* end of frame interrupt enable */
+		unsigned int ndar			: 28;	/* next descriptor address */
+	} bits;
+} CRYPTO_RXDMA_CURR_DESC_T;
+
+
+
+/******************************************************/
+/*    the field definition of CRYPTO module Register   */ 
+/******************************************************/
+typedef union
+{
+	unsigned int id;
+	struct bit_0000
+	{
+		unsigned int revision_id	:  4;
+		unsigned int device_id		: 28;	
+	} bits;
+} CRYPTO_ID_T;
+
+typedef union
+{
+    unsigned int control;
+    struct bit_0004
+    {
+        unsigned int process_id         :  8; /* Used to identify process.This number will be */
+                                              /* copied to the descriptor status of received packet*/ 
+        unsigned int auth_check_len     :  3; /* Number of 32-bit words to be check or appended */
+                                              /* by the authentication module */   
+        unsigned int                    :  1;
+        unsigned int auth_algorithm     :  3; 
+        unsigned int auth_mode          :  1; /* 0-Append or 1-Check Authentication Result */
+        unsigned int fcs_stream_copy    :  1; /* enable authentication stream copy */
+        unsigned int                    :  2;
+        unsigned int mix_key_sel        :  1; /* 0:use rCipherKey0-3  1:use Key Mixer */
+        unsigned int aesnk              :  4; /* AES Key Size */
+        unsigned int cipher_algorithm   :  3; 
+        unsigned int                    :  1;
+        unsigned int op_mode            :  4; /* Operation Mode for the CRYPTO Module */
+    } bits;
+} CRYPTO_CONTROL_T;
+                                             
+
+typedef union
+{
+    unsigned int cipher_packet;
+    struct bit_00080
+    {
+        unsigned int cipher_algorithm_len : 16; /* The length of message body to be encrypted/decrypted */  
+        unsigned int cipher_header_len    : 16; /* The header length to be skipped by the cipher */
+    } bits;
+} CRYPTO_CIPHER_PACKET_T;
+
+typedef union
+{
+    unsigned int auth_packet;
+    struct bit_000c0
+    {
+        unsigned int auth_algorithm_len : 16; /* The length of message body that is to be authenticated */
+        unsigned int auth_header_len    : 16; /* The header length that is to be skipped by the authenticator */
+    } bits;
+} CRYPTO_AUTH_PACKET_T;        
+
+typedef union
+{
+    unsigned int status;
+    struct bit_00a8
+    {
+        unsigned int cipher_err_code:  4; /* Cipher module erroe code */
+        unsigned int auth_err_code  :  4; /* Authentication module error code */
+		/* for auth_err_code and cipher_err_code ******
+		 * 0: Normal
+		 * 1: Input Frame is shorter than what it expects
+		 * 2: Input Frame is longer than what it expects
+		 **********************************************/
+        unsigned int parser_err_code:  4; /* Authentication Compare result */
+        unsigned int                : 16;
+        unsigned int ccm_mic_ok     :  1; /* CCM Mic compare result */
+        unsigned int tkip_mic_ok    :  1; /* TKIP Mic compare result */
+        unsigned int wep_crc_ok     :  1; /* WEP ICV compare result */
+        unsigned int auth_cmp_rslt  :  1; /* Authentication Compare result */
+    } bits;
+} CRYPTO_STATUS_T;
+
+        
+ 
+/************************************************************************/
+/*              CRYPTO Descriptor Format                                 */
+/************************************************************************/		
+typedef struct descriptor_t
+{
+	union frame_control_t
+	{
+		unsigned int bits32;
+		struct bits_0000
+		{
+			unsigned int buffer_size:16;	/* transfer buffer size associated with current description*/
+			unsigned int desc_count : 6;	/* number of descriptors used for the current frame */
+			unsigned int            : 6;    /* checksum[15:8] */
+			unsigned int            : 1;    /* authentication compare result */
+			unsigned int perr		: 1;	/* protocol error during processing this descriptor */
+			unsigned int derr		: 1;	/* data error during processing this descriptor */
+			unsigned int own 		: 1;	/* owner bit. 0-CPU, 1-DMA */
+		} bits;		
+	} frame_ctrl;
+	
+	union flag_status_t
+	{
+		unsigned int bits32;
+		struct bits_0004
+		{
+			unsigned int frame_count:16;	
+			unsigned int process_id : 8;
+			unsigned int ccmp_mic_ok: 1;
+			unsigned int tkip_mic_ok: 1;
+			unsigned int wep_crc_ok : 1;
+			unsigned int auth_result: 1;
+			unsigned int            : 4;
+//            unsigned int checksum   : 8; /* checksum[7:0] */ 
+		} bits_rx_status;
+		
+		struct bits_0005
+		{
+			unsigned int frame_count:16;	
+			unsigned int process_id : 8;	
+            unsigned int            : 8; 
+		} bits_tx_status;
+
+		struct bits_0006
+		{
+			unsigned int tqflag     :10;    
+			unsigned int            :22;
+		} bits_tx_flag;
+	} flag_status;
+
+	unsigned int buf_adr;	/* data buffer address */	
+	
+	union next_desc_t
+	{
+		unsigned int next_descriptor;
+		struct bits_000c
+		{
+			unsigned int sof_eof	: 2;	/* 00-the linking descriptor   01-the last descriptor of a frame*/
+			                                /* 10-the first descriptor of a frame    11-only one descriptor for a frame*/
+			unsigned int dec   		: 1;	/* AHB bus address. 0-increment; 1-decrement */   
+			unsigned int eofie		: 1;	/* end of frame interrupt enable */
+			unsigned int ndar		:28;	/* next descriptor address */
+		} bits;                    			
+	} next_desc;					        
+} CRYPTO_DESCRIPTOR_T;		            	
+
+
+typedef struct CRYPTO_S
+{
+    unsigned char       *tx_bufs;
+    unsigned char       *rx_bufs;
+	CRYPTO_DESCRIPTOR_T	*tx_desc;	    /* point to virtual TX descriptor address*/
+	CRYPTO_DESCRIPTOR_T	*rx_desc;	    /* point to virtual RX descriptor address*/
+	CRYPTO_DESCRIPTOR_T	*tx_cur_desc;	/* point to current TX descriptor */
+	CRYPTO_DESCRIPTOR_T	*rx_cur_desc;	/* point to current RX descriptor */
+	CRYPTO_DESCRIPTOR_T  *tx_finished_desc;
+	CRYPTO_DESCRIPTOR_T  *rx_finished_desc;
+	dma_addr_t          rx_desc_dma;	/* physical RX descriptor address */
+	dma_addr_t          tx_desc_dma;    /* physical TX descriptor address */
+	dma_addr_t          rx_bufs_dma;    /* physical RX descriptor address */
+	dma_addr_t          tx_bufs_dma;    /* physical TX descriptor address */
+} CRYPTO_T;
 
 
 #if 0
@@ -247,7 +558,7 @@ struct gemini_crypto_info {
 struct gemini_crypto_info {
 	void __iomem			*base;
 	struct device			*dev;
-	struct clk			*clk;
+	struct clk			*pclk;
 	int				irq;
 
 	struct aes_txdesc		*tx;
