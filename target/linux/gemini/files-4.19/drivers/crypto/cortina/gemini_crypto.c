@@ -360,6 +360,7 @@ static int gemini_crypto_probe(struct platform_device *pdev)
 	int err = 0;
 	u32 reg;
 
+
 	crypto_info = devm_kzalloc(&pdev->dev,
 				   sizeof(*crypto_info), GFP_KERNEL);
 	if (!crypto_info) {
@@ -444,7 +445,7 @@ static int __exit gemini_crypto_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id crypto_of_id_table[] = {
-	{ .compatible = "cortina-crypto" },
+	{ .compatible = "cortina,gemini-crypto" },
 	{}
 };
 MODULE_DEVICE_TABLE(of, crypto_of_id_table);
@@ -453,12 +454,26 @@ static struct platform_driver crypto_driver = {
 	.probe		= gemini_crypto_probe,
 	.remove		= gemini_crypto_remove,
 	.driver		= {
-		.name	= "gemini-crypto",
-		.of_match_table	= crypto_of_id_table,
+		.name	= "cortina-crypto",
+		.of_match_table	= of_match_ptr(crypto_of_id_table),
 	},
 };
 
 module_platform_driver(crypto_driver);
+
+/*
+static int __init cortina_crypto_driver_init(void)
+{
+	return platform_driver_register(&crypto_driver);
+}
+module_init(cortina_crypto_driver_init);
+
+static void __exit cortina_crypto_driver_exit(void)
+{
+	platform_driver_unregister(&crypto_driver);
+}
+module_exit(cortina_crypto_driver_exit);
+*/
 
 MODULE_AUTHOR("Andreas Fiedler <andreas.fiedler@gmx.net>");
 MODULE_DESCRIPTION("Support for Cortina Gemini SoC cryptographic engine");
