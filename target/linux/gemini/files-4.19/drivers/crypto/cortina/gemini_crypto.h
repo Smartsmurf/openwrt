@@ -573,8 +573,12 @@ struct gemini_crypto_info {
 	unsigned int			rec_front_idx;
 	unsigned int			rec_rear_idx;
 	struct mtk_dma_rec		*rec;
-	spinlock_t			lock;
 	unsigned int			count;
+	spinlock_t			lock;
+	spinlock_t			irq_lock;
+	spinlock_t			tx_lock;
+	unsigned int			polling_flag;
+
 };
 
 /* the private variable of hash */

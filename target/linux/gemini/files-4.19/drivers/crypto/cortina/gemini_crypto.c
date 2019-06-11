@@ -20,205 +20,16 @@
 #include <linux/reset.h>
 #include "gemini_crypto.h"
 
-#if 0
-static int gemini_crypto_enable_clk(struct gemini_crypto_info *dev)
-{
-	int err;
+#define gemini_crypto_read_reg(base, offset)		(readl(base + offset))
+#define gemini_crypto_write_reg(base, offset, data)     (writel(data, base + offset))
 
-	err = clk_prepare_enable(dev->sclk);
-	if (err) {
-		dev_err(dev->dev, "[%s:%d], Couldn't enable clock sclk\n",
-			__func__, __LINE__);
-		goto err_return;
-	}
-	err = clk_prepare_enable(dev->aclk);
-	if (err) {
-		dev_err(dev->dev, "[%s:%d], Couldn't enable clock aclk\n",
-			__func__, __LINE__);
-		goto err_aclk;
-	}
-	err = clk_prepare_enable(dev->hclk);
-	if (err) {
-		dev_err(dev->dev, "[%s:%d], Couldn't enable clock hclk\n",
-			__func__, __LINE__);
-		goto err_hclk;
-	}
-	err = clk_prepare_enable(dev->dmaclk);
-	if (err) {
-		dev_err(dev->dev, "[%s:%d], Couldn't enable clock dmaclk\n",
-			__func__, __LINE__);
-		goto err_dmaclk;
-	}
-	return err;
-err_dmaclk:
-	clk_disable_unprepare(dev->hclk);
-err_hclk:
-	clk_disable_unprepare(dev->aclk);
-err_aclk:
-	clk_disable_unprepare(dev->sclk);
-err_return:
-	return err;
-}
+#define MAX_POLLING_LOOPS 40000
 
-static void gemini_crypto_disable_clk(struct gemini_crypto_info *dev)
-{
-	clk_disable_unprepare(dev->dmaclk);
-	clk_disable_unprepare(dev->hclk);
-	clk_disable_unprepare(dev->aclk);
-	clk_disable_unprepare(dev->sclk);
-}
+// static unsigned int polling_flag = 0;
+static int polling_process_id = -1;
+static unsigned int flag_tasklet_scheduled = 0;
 
-static int check_alignment(struct scatterlist *sg_src,
-			   struct scatterlist *sg_dst,
-			   int align_mask)
-{
-	int in, out, align;
-
-	in = IS_ALIGNED((uint32_t)sg_src->offset, 4) &&
-	     IS_ALIGNED((uint32_t)sg_src->length, align_mask);
-	if (!sg_dst)
-		return in;
-	out = IS_ALIGNED((uint32_t)sg_dst->offset, 4) &&
-	      IS_ALIGNED((uint32_t)sg_dst->length, align_mask);
-	align = in && out;
-
-	return (align && (sg_src->length == sg_dst->length));
-}
-
-static int gemini_load_data(struct gemini_crypto_info *dev,
-			struct scatterlist *sg_src,
-			struct scatterlist *sg_dst)
-{
-	unsigned int count;
-
-	dev->aligned = dev->aligned ?
-		check_alignment(sg_src, sg_dst, dev->align_size) :
-		dev->aligned;
-	if (dev->aligned) {
-		count = min(dev->left_bytes, sg_src->length);
-		dev->left_bytes -= count;
-
-		if (!dma_map_sg(dev->dev, sg_src, 1, DMA_TO_DEVICE)) {
-			dev_err(dev->dev, "[%s:%d] dma_map_sg(src)  error\n",
-				__func__, __LINE__);
-			return -EINVAL;
-		}
-		dev->addr_in = sg_dma_address(sg_src);
-
-		if (sg_dst) {
-			if (!dma_map_sg(dev->dev, sg_dst, 1, DMA_FROM_DEVICE)) {
-				dev_err(dev->dev,
-					"[%s:%d] dma_map_sg(dst)  error\n",
-					__func__, __LINE__);
-				dma_unmap_sg(dev->dev, sg_src, 1,
-					     DMA_TO_DEVICE);
-				return -EINVAL;
-			}
-			dev->addr_out = sg_dma_address(sg_dst);
-		}
-	} else {
-		count = (dev->left_bytes > PAGE_SIZE) ?
-			PAGE_SIZE : dev->left_bytes;
-
-		if (!sg_pcopy_to_buffer(dev->first, dev->nents,
-					dev->addr_vir, count,
-					dev->total - dev->left_bytes)) {
-			dev_err(dev->dev, "[%s:%d] pcopy err\n",
-				__func__, __LINE__);
-			return -EINVAL;
-		}
-		dev->left_bytes -= count;
-		sg_init_one(&dev->sg_tmp, dev->addr_vir, count);
-		if (!dma_map_sg(dev->dev, &dev->sg_tmp, 1, DMA_TO_DEVICE)) {
-			dev_err(dev->dev, "[%s:%d] dma_map_sg(sg_tmp)  error\n",
-				__func__, __LINE__);
-			return -ENOMEM;
-		}
-		dev->addr_in = sg_dma_address(&dev->sg_tmp);
-
-		if (sg_dst) {
-			if (!dma_map_sg(dev->dev, &dev->sg_tmp, 1,
-					DMA_FROM_DEVICE)) {
-				dev_err(dev->dev,
-					"[%s:%d] dma_map_sg(sg_tmp)  error\n",
-					__func__, __LINE__);
-				dma_unmap_sg(dev->dev, &dev->sg_tmp, 1,
-					     DMA_TO_DEVICE);
-				return -ENOMEM;
-			}
-			dev->addr_out = sg_dma_address(&dev->sg_tmp);
-		}
-	}
-	dev->count = count;
-	return 0;
-}
-
-static void gemini_unload_data(struct gemini_crypto_info *dev)
-{
-	struct scatterlist *sg_in, *sg_out;
-
-	sg_in = dev->aligned ? dev->sg_src : &dev->sg_tmp;
-	dma_unmap_sg(dev->dev, sg_in, 1, DMA_TO_DEVICE);
-
-	if (dev->sg_dst) {
-		sg_out = dev->aligned ? dev->sg_dst : &dev->sg_tmp;
-		dma_unmap_sg(dev->dev, sg_out, 1, DMA_FROM_DEVICE);
-	}
-}
-
-
-static int gemini_crypto_enqueue(struct gemini_crypto_info *dev,
-			      struct crypto_async_request *async_req)
-{
-	unsigned long flags;
-	int ret;
-
-	spin_lock_irqsave(&dev->lock, flags);
-	ret = crypto_enqueue_request(&dev->queue, async_req);
-	if (dev->busy) {
-		spin_unlock_irqrestore(&dev->lock, flags);
-		return ret;
-	}
-	dev->busy = true;
-	spin_unlock_irqrestore(&dev->lock, flags);
-	tasklet_schedule(&dev->queue_task);
-
-	return ret;
-}
-
-static void gemini_crypto_queue_task_cb(unsigned long data)
-{
-	struct gemini_crypto_info *dev = (struct gemini_crypto_info *)data;
-	struct crypto_async_request *async_req, *backlog;
-	unsigned long flags;
-	int err = 0;
-
-	dev->err = 0;
-	spin_lock_irqsave(&dev->lock, flags);
-	backlog   = crypto_get_backlog(&dev->queue);
-	async_req = crypto_dequeue_request(&dev->queue);
-
-	if (!async_req) {
-		dev->busy = false;
-		spin_unlock_irqrestore(&dev->lock, flags);
-		return;
-	}
-	spin_unlock_irqrestore(&dev->lock, flags);
-
-	if (backlog) {
-		backlog->complete(backlog, -EINPROGRESS);
-		backlog = NULL;
-	}
-
-	dev->async_req = async_req;
-	err = dev->start(dev);
-	if (err)
-		dev->complete(dev->async_req, err);
-}
-
-#endif
-
-static void gemini_crypto_write_reg(void __iomem *addr,unsigned int data,unsigned int bit_mask)
+static void gemini_crypto_write_mask(void __iomem *addr,unsigned int data,unsigned int bit_mask)
 {
 	volatile unsigned int reg_val;
 	reg_val = ( readl(addr) & (~bit_mask) ) | (data & bit_mask);
@@ -234,7 +45,7 @@ static irqreturn_t gemini_crypto_irq_handle(int irq, void *dev_id)
 	status.bits32 = readl(dev->base + CRYPTO_DMA_STATUS);
 
 	/* clear DMA status */
-	gemini_crypto_write_reg(dev->base + CRYPTO_DMA_STATUS,status.bits32,status.bits32);
+	gemini_crypto_write_mask(dev->base + CRYPTO_DMA_STATUS,status.bits32,status.bits32);
 
 	if ((status.bits32 & 0x63000000) > 0)
 	{
@@ -276,6 +87,124 @@ static irqreturn_t gemini_crypto_irq_handle(int irq, void *dev_id)
 	spin_unlock(&dev->lock);
 	return IRQ_HANDLED;
 */
+}
+
+static int gemini_crypto_rx_packet(struct gemini_crypto_info *secdev, unsigned int mode)
+{
+	return 1;
+}
+
+static int gemini_crypto_tx_packet(struct gemini_crypto_info *secdev, struct scatterlist *packet, 
+	int len, unsigned int tqflag)
+{
+	return 1;
+}
+
+static int gemini_interrupt_polling(struct gemini_crypto_info *secdev)
+{
+	CRYPTO_DMA_STATUS_T	status;
+	unsigned int        i;
+	unsigned long		flags;
+	volatile CRYPTO_RXDMA_CTRL_T	rxdma_ctrl;
+
+	if (secdev->polling_flag == 0)
+	{
+		dev_warn(secdev->dev, "polling flag has been turned off (1)\n");
+		return 0;
+	}
+
+//	disable_irq(IRQ_IPSEC);
+	for (i=0; i < MAX_POLLING_LOOPS; i++)
+	{
+		/* read DMA status */
+		status.bits32 = gemini_crypto_read_reg(secdev->base, CRYPTO_DMA_STATUS);
+
+		if (status.bits.rs_eofi==1){
+			/* clear DMA status */
+			gemini_crypto_write_mask(secdev->base + CRYPTO_DMA_STATUS,status.bits32,status.bits32);
+			break;
+		}
+	        if( secdev->polling_flag == 0){
+			dev_warn(secdev->dev, "polling flag has been turned off (2)\n");
+			return 0;
+		}
+	}
+	if( i >= MAX_POLLING_LOOPS ){
+		dev_err(secdev->dev, "FCS timeout while polling.\n");
+		return 0;
+	}
+
+	if (status.bits.rs_eofi==1) {
+		gemini_crypto_rx_packet(secdev, 1);
+	}
+//	enable_irq(IRQ_IPSEC);
+
+	if (secdev->polling_flag == 1){
+//		printk("%s::gotta run polling more to get to the number we want !!\n",__func__);
+//		printk("polling_process_id = %d, last_rx_pid = %d\n",polling_process_id,last_rx_pid);
+//		start_dma();
+		if( !gemini_interrupt_polling(secdev) ){
+			dev_err(secdev->dev, "polling failed.\n");
+			return 0;
+		}
+	} else {
+		if (flag_tasklet_scheduled != 1) {
+			spin_lock_irqsave(&secdev->irq_lock,flags);
+			rxdma_ctrl.bits32 = gemini_crypto_read_reg(secdev->base, CRYPTO_RXDMA_CTRL);
+			rxdma_ctrl.bits.rd_eof_en = 1;
+			gemini_crypto_write_reg(secdev->base, CRYPTO_RXDMA_CTRL,rxdma_ctrl.bits32);
+			spin_unlock_irqrestore(&secdev->irq_lock,flags);
+		}
+	}
+	return 1;    
+}
+
+static void gemini_crypto_start_dma(struct gemini_crypto_info *secdev)
+{
+	CRYPTO_TXDMA_FIRST_DESC_T	txdma_busy;
+	unsigned int			reg_val;
+
+	/* if TX DMA process is stopped , restart it */
+	txdma_busy.bits32 = gemini_crypto_read_reg(secdev->base, CRYPTO_TXDMA_FIRST_DESC);
+	if (txdma_busy.bits.td_busy == 0)
+	{
+		/* restart Rx DMA process */
+		reg_val = gemini_crypto_read_reg(secdev->base, CRYPTO_RXDMA_CTRL);
+		reg_val |= (0x03<<30);
+		gemini_crypto_write_reg(secdev->base, CRYPTO_RXDMA_CTRL, reg_val);
+
+		/* restart Tx DMA process */
+		reg_val = gemini_crypto_read_reg(secdev->base, CRYPTO_TXDMA_CTRL);
+		reg_val |= (0x03<<30);
+		gemini_crypto_write_reg(secdev->base, CRYPTO_TXDMA_CTRL, reg_val);
+	}
+}
+
+
+void ipsec_hw_cipher(struct gemini_crypto_info *secdev, volatile unsigned char *ctrl_pkt,int ctrl_len,
+	volatile struct scatterlist *data_pkt, int data_len, unsigned int tqflag,
+	unsigned char *out_pkt,int *out_len )
+{
+	volatile struct	scatterlist sg[1];
+	unsigned long		flags;
+
+//	disable_irq(IRQ_IPSEC);
+	// https://stackoverflow.com/questions/41802779/scatterlist-in-linux-crypto-api
+
+	sg[0].page_link = (long)virt_to_page(ctrl_pkt);
+	sg[0].offset = offset_in_page(ctrl_pkt);
+	sg[0].length = ctrl_len;
+//	ipsec_tx_packet(ctrl_pkt,ctrl_len,tqflag);
+	spin_lock_irqsave(&secdev->tx_lock,flags);
+	gemini_crypto_tx_packet(secdev, sg, ctrl_len,tqflag);
+	gemini_crypto_tx_packet(secdev, data_pkt,data_len,0);
+	gemini_crypto_start_dma( secdev );
+	spin_unlock_irqrestore(&secdev->tx_lock,flags);
+
+	if (secdev->polling_flag) {
+		if( !gemini_interrupt_polling(secdev) )
+			dev_err(secdev->dev, "%s: interrupt polling failed.\n",__func__);
+	}
 }
 
 
@@ -374,7 +303,11 @@ static int gemini_crypto_probe(struct platform_device *pdev)
 		goto err_crypto;
 */
 
+	crypto_info->polling_flag = 0;
+
 	spin_lock_init(&crypto_info->lock);
+	spin_lock_init(&crypto_info->tx_lock);
+	spin_lock_init(&crypto_info->irq_lock);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	crypto_info->base = devm_ioremap_resource(&pdev->dev, res);
