@@ -11,43 +11,74 @@
  *
  * Some ideas are from Rockwell driver.
  */
+#include <crypto/internal/skcipher.h>
 #include "gemini_crypto.h"
 
-#if 0
 #define RK_CRYPTO_DEC			BIT(0)
 
-static void gemini_crypto_complete(struct crypto_async_request *base, int err)
-{
+//static void gemini_crypto_complete(struct crypto_async_request *base, int err)
+//{
 //	if (base->complete)
 //		base->complete(base, err);
-}
+//}
 
-static int gemini_handle_req(struct gemini_crypto_info *dev,
-			 struct ablkcipher_request *req)
-{
+//static int gemini_handle_req(struct gemini_crypto_info *dev,
+//			 struct ablkcipher_request *req)
+//{
 //	if (!IS_ALIGNED(req->nbytes, dev->align_size))
 //		return -EINVAL;
 //	else
 //		return dev->enqueue(dev, &req->base);
-}
+//}
 
 static int gemini_aes_setkey(struct crypto_ablkcipher *cipher,
 			 const u8 *key, unsigned int keylen)
 {
-/*
-	struct crypto_tfm *tfm = crypto_ablkcipher_tfm(cipher);
-	struct gemini_cipher_ctx *ctx = crypto_tfm_ctx(tfm);
+	struct gemini_cipher_ctx *ctx = crypto_ablkcipher_ctx(cipher);
+	struct CRYPTO_CIPHER_ECB_S *ecb = &ctx->ecb;
 
 	if (keylen != AES_KEYSIZE_128 && keylen != AES_KEYSIZE_192 &&
 	    keylen != AES_KEYSIZE_256) {
 		crypto_ablkcipher_set_flags(cipher, CRYPTO_TFM_RES_BAD_KEY_LEN);
 		return -EINVAL;
 	}
-	ctx->keylen = keylen;
-	memcpy_toio(ctx->dev->reg + RK_CRYPTO_AES_KEY_0, key, keylen);
-*/
+        ecb->control.bits.aesnk = keylen/4; /* AES key size */ 
 	return 0;
 }
+
+static int gemini_aes_ecb_encrypt(struct ablkcipher_request *req)
+{
+	struct crypto_ablkcipher *tfm = crypto_ablkcipher_reqtfm(req);
+	struct gemini_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
+	struct CRYPTO_CIPHER_ECB_S *ecb = &ctx->ecb;
+
+	ecb->control.bits.op_mode = CIPHER_ENC;
+	ecb->control.bits.cipher_algorithm = ECB_AES;
+	ecb->control.bits.process_id = 0;
+
+	return 1;
+}
+
+static int gemini_aes_ecb_decrypt(struct ablkcipher_request *req)
+{
+	struct crypto_ablkcipher *tfm = crypto_ablkcipher_reqtfm(req);
+	struct gemini_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
+	struct CRYPTO_CIPHER_ECB_S *ecb = &ctx->ecb;
+	int ret;
+
+	ecb->control.bits.op_mode = CIPHER_DEC;
+	ecb->control.bits.cipher_algorithm = ECB_AES;
+	ecb->control.bits.process_id = 0;
+
+        /* hardware encryption */
+//	ret = crypto_hw_cipher(ctx->secdev, (unsigned char *)ecb,sizeof(CRYPTO_CIPHER_ECB_T),
+//              	p->in_packet,op->pkt_len,tdflag,
+//                ipsec_result.hw_cipher,&ipsec_result.hw_pkt_len);
+	return ret;
+;
+}
+
+#if 0
 
 static int gemini_tdes_setkey(struct crypto_ablkcipher *cipher,
 			  const u8 *key, unsigned int keylen)
@@ -74,30 +105,6 @@ static int gemini_tdes_setkey(struct crypto_ablkcipher *cipher,
 	memcpy_toio(ctx->dev->reg + RK_CRYPTO_TDES_KEY1_0, key, keylen);
 */
 	return 0;
-}
-
-static int gemini_aes_ecb_encrypt(struct ablkcipher_request *req)
-{
-/*
-	struct crypto_ablkcipher *tfm = crypto_ablkcipher_reqtfm(req);
-	struct gemini_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
-	struct gemini_crypto_info *dev = ctx->dev;
-
-	ctx->mode = RK_CRYPTO_AES_ECB_MODE;
-*/
-	return gemini_handle_req(dev, req);
-}
-
-static int gemini_aes_ecb_decrypt(struct ablkcipher_request *req)
-{
-/*
-	struct crypto_ablkcipher *tfm = crypto_ablkcipher_reqtfm(req);
-	struct gemini_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
-	struct gemini_crypto_info *dev = ctx->dev;
-
-	ctx->mode = RK_CRYPTO_AES_ECB_MODE | RK_CRYPTO_DEC;
-*/
-	return gemini_handle_req(dev, req);
 }
 
 static int gemini_aes_cbc_encrypt(struct ablkcipher_request *req)
@@ -346,32 +353,31 @@ out_rx:
 
 static int gemini_ablk_cra_init(struct crypto_tfm *tfm)
 {
-/*
+	const char *name = crypto_tfm_alg_name(tfm);
+	const u32 flags = 0; // CRYPTO_ALG_ASYNC | CRYPTO_ALG_NEED_FALLBACK;
 	struct gemini_cipher_ctx *ctx = crypto_tfm_ctx(tfm);
-	struct crypto_alg *alg = tfm->__crt_alg;
-	struct gemini_crypto_tmp *algt;
+	struct crypto_skcipher *blk;
+	
+	blk = crypto_alloc_skcipher(name, 0, flags);
 
-	algt = container_of(alg, struct gemini_crypto_tmp, alg.crypto);
+	if (IS_ERR(blk))
+		return PTR_ERR(blk);
 
-	ctx->dev = algt->dev;
-	ctx->dev->align_size = crypto_tfm_alg_alignmask(tfm) + 1;
-	ctx->dev->start = gemini_ablk_start;
-	ctx->dev->update = gemini_ablk_rx;
-	ctx->dev->complete = gemini_crypto_complete;
-	ctx->dev->addr_vir = (char *)__get_free_page(GFP_KERNEL);
+	ctx->fallback = blk;
 
-	return ctx->dev->addr_vir ? ctx->dev->enable_clk(ctx->dev) : -ENOMEM;
-*/
+	// tfm->crt_ablkcipher.reqsize = sizeof(struct crypto_cipher_reqctx);
+
+	return 0;
 }
 
 static void gemini_ablk_cra_exit(struct crypto_tfm *tfm)
 {
-/*
 	struct gemini_cipher_ctx *ctx = crypto_tfm_ctx(tfm);
 
-	free_page((unsigned long)ctx->dev->addr_vir);
-	ctx->dev->disable_clk(ctx->dev);
-*/
+	if (ctx->fallback)
+		crypto_free_skcipher(ctx->fallback);
+
+	ctx->fallback = NULL;
 }
 
 
@@ -393,9 +399,10 @@ struct gemini_crypto_tmp gemini_ecb_aes_alg = {
 		.cra_u.ablkcipher	= {
 			.min_keysize	= AES_MIN_KEY_SIZE,
 			.max_keysize	= AES_MAX_KEY_SIZE,
-//			.setkey		= gemini_aes_setkey,
-//			.encrypt	= gemini_aes_ecb_encrypt,
-//			.decrypt	= gemini_aes_ecb_decrypt,
+			.ivsize		= AES_BLOCK_SIZE,
+			.setkey		= gemini_aes_setkey,
+			.encrypt	= gemini_aes_ecb_encrypt,
+			.decrypt	= gemini_aes_ecb_decrypt,
 		}
 	}
 };

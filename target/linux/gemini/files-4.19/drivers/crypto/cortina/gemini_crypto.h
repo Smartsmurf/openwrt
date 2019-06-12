@@ -46,6 +46,47 @@ enum CRYPTO_OWN_BIT {
     DMA	= 1
 };   
 
+/* define cipher algorithm */
+enum CRYPTO_CIPHER {
+	DES_ECB_E	=20,
+	TDES_ECB_E	=21,
+	AES_ECB_E	=22,
+	DES_CBC_E	=24,
+	TDES_CBC_E	=25,
+	AES_CBC_E	=26,
+	
+	DES_ECB_D	=27,
+	TDES_ECB_D	=28,
+	AES_ECB_D	=29,
+	DES_CBC_D	=31,
+	TDES_CBC_D	=32,
+	AES_CBC_D	=33,
+	A_SHA1      =12,
+	A_HMAC_SHA1 =13,
+	A_MD5       =14,
+	A_HMAC_MD5  =15,
+};
+
+// opMode
+enum CRYPTO_OPMODE {
+	CIPHER_ENC = 0x1,
+	CIPHER_DEC = 0x3,
+	AUTH       = 0x4,
+	ENC_AUTH   = 0x5,
+	AUTH_DEC   = 0x7,
+};
+
+// cipherAlgorithm
+enum CRYPTO_CIPHER_ALGORITHM {
+	CBC_DES    =  0x4,
+	CBC_3DES   =  0x5,
+	CBC_AES    =  0x6,
+	ECB_DES    =  0x0,
+	ECB_3DES   =  0x1,
+	ECB_AES    =  0x2,
+};
+
+
 /******************************************************/
 /* the field definition of CRYPTO DMA Module Register  */
 /******************************************************/
@@ -323,7 +364,6 @@ typedef struct descriptor_t
 	} next_desc;					        
 } CRYPTO_DESCRIPTOR_T;		            	
 
-
 typedef struct CRYPTO_S
 {
     unsigned char       *tx_bufs;
@@ -339,6 +379,85 @@ typedef struct CRYPTO_S
 	dma_addr_t          rx_bufs_dma;    /* physical RX descriptor address */
 	dma_addr_t          tx_bufs_dma;    /* physical TX descriptor address */
 } CRYPTO_T;
+
+/*=====================================================================================================*/
+/*  Data Structure of Control Packet  */
+/*=====================================================================================================*/    
+typedef struct CRYPTO_ECB_AUTH_S
+{
+    CRYPTO_CONTROL_T         control; /* control parameter */
+    CRYPTO_CIPHER_PACKET_T   cipher; /* cipher packet parameter */
+    CRYPTO_AUTH_PACKET_T     auth;   /* authentication packet parameter */
+    unsigned char           cipher_key[8*4];
+    unsigned char           auth_check_val[5*4];
+} CRYPTO_ECB_AUTH_T;    
+
+typedef struct CRYPTO_CBC_AUTH_S
+{
+    CRYPTO_CONTROL_T         control; /* control parameter */
+    CRYPTO_CIPHER_PACKET_T   cipher; /* cipher packet parameter */
+    CRYPTO_AUTH_PACKET_T     auth;   /* authentication packet parameter */
+    unsigned char           cipher_iv[4*4]; 
+    unsigned char           cipher_key[8*4];
+    unsigned char           auth_check_val[5*4];
+} CRYPTO_CBC_AUTH_T;    
+
+typedef struct CRYPTO_ECB_HMAC_AUTH_S
+{
+    CRYPTO_CONTROL_T         control; /* control parameter */
+    CRYPTO_CIPHER_PACKET_T   cipher; /* cipher packet parameter */
+    CRYPTO_AUTH_PACKET_T     auth;   /* authentication packet parameter */
+    unsigned char           cipher_key[8*4];
+    unsigned char           auth_key[16*4];
+    unsigned char           auth_check_val[5*4];
+} CRYPTO_ECB_AUTH_HMAC_T;    
+
+typedef struct CRYPTO_CBC_HMAC_AUTH_S
+{
+    CRYPTO_CONTROL_T         control; /* control parameter */
+    CRYPTO_CIPHER_PACKET_T   cipher; /* cipher packet parameter */
+    CRYPTO_AUTH_PACKET_T     auth;   /* authentication packet parameter */
+    unsigned char           cipher_iv[4*4]; 
+    unsigned char           cipher_key[8*4];
+    unsigned char           auth_key[16*4];
+    unsigned char           auth_check_val[5*4];
+} CRYPTO_CBC_AUTH_HMAC_T;    
+
+typedef struct CRYPTO_HMAC_AUTH_S
+{
+    CRYPTO_CONTROL_T         control; /* control parameter */
+    CRYPTO_AUTH_PACKET_T     auth;   /* authentication packet parameter */
+    unsigned char           auth_key[16*4];
+    unsigned char           auth_check_val[5*4];
+} CRYPTO_HMAC_AUTH_T;    
+
+typedef union 
+{
+    unsigned char auth_pkt[28];
+    
+    struct CRYPTO_AUTH_S
+    {
+        CRYPTO_CONTROL_T         control; /* control parameter(4-byte) */
+        CRYPTO_AUTH_PACKET_T     auth;   /* authentication packet parameter(4-byte) */
+        unsigned char           auth_check_val[5*4];
+    } var;    
+} CRYPTO_AUTH_T;    
+    
+typedef struct CRYPTO_CIPHER_CBC_S
+{
+    CRYPTO_CONTROL_T         control; /* control parameter */
+    CRYPTO_CIPHER_PACKET_T   cipher; /* cipher packet parameter */
+    unsigned char           cipher_iv[4*4]; 
+    unsigned char           cipher_key[8*4];
+} CRYPTO_CIPHER_CBC_T;    
+
+typedef struct CRYPTO_CIPHER_ECB_S
+{
+    CRYPTO_CONTROL_T         control; /* control parameter */
+    CRYPTO_CIPHER_PACKET_T   cipher; /* cipher packet parameter */
+    unsigned char           cipher_key[8*4];
+} CRYPTO_CIPHER_ECB_T; 
+
 
 struct CRYPTO_PACKET_S
 {
@@ -368,7 +487,7 @@ struct CRYPTO_PACKET_S
     unsigned int    out_pkt_len;        /* output total packet length */
     unsigned int    auth_cmp_result;    /* authentication compare result */
     unsigned int    checksum;           /* checksum value */
-    unsigned int    status;             /* ipsec return status. 0:success, others:fail */
+    unsigned int    status;             /* return status. 0:success, others:fail */
 //#if (IPSEC_TEST == 1)          
 //    unsigned char    *sw_packet;         /* for test only */
 //    unsigned int    sw_pkt_len;         /* for test only */
@@ -377,224 +496,7 @@ struct CRYPTO_PACKET_S
 
 typedef struct CRYPTO_PACKET_S qhead;
 
-#if 0
-#define _SBF(v, f)			((v) << (f))
 
-/* Crypto control registers*/
-#define RK_CRYPTO_INTSTS		0x0000
-#define RK_CRYPTO_PKA_DONE_INT		BIT(5)
-#define RK_CRYPTO_HASH_DONE_INT		BIT(4)
-#define RK_CRYPTO_HRDMA_ERR_INT		BIT(3)
-#define RK_CRYPTO_HRDMA_DONE_INT	BIT(2)
-#define RK_CRYPTO_BCDMA_ERR_INT		BIT(1)
-#define RK_CRYPTO_BCDMA_DONE_INT	BIT(0)
-
-#define RK_CRYPTO_INTENA		0x0004
-#define RK_CRYPTO_PKA_DONE_ENA		BIT(5)
-#define RK_CRYPTO_HASH_DONE_ENA		BIT(4)
-#define RK_CRYPTO_HRDMA_ERR_ENA		BIT(3)
-#define RK_CRYPTO_HRDMA_DONE_ENA	BIT(2)
-#define RK_CRYPTO_BCDMA_ERR_ENA		BIT(1)
-#define RK_CRYPTO_BCDMA_DONE_ENA	BIT(0)
-
-#define RK_CRYPTO_CTRL			0x0008
-#define RK_CRYPTO_WRITE_MASK		_SBF(0xFFFF, 16)
-#define RK_CRYPTO_TRNG_FLUSH		BIT(9)
-#define RK_CRYPTO_TRNG_START		BIT(8)
-#define RK_CRYPTO_PKA_FLUSH		BIT(7)
-#define RK_CRYPTO_HASH_FLUSH		BIT(6)
-#define RK_CRYPTO_BLOCK_FLUSH		BIT(5)
-#define RK_CRYPTO_PKA_START		BIT(4)
-#define RK_CRYPTO_HASH_START		BIT(3)
-#define RK_CRYPTO_BLOCK_START		BIT(2)
-#define RK_CRYPTO_TDES_START		BIT(1)
-#define RK_CRYPTO_AES_START		BIT(0)
-
-#define RK_CRYPTO_CONF			0x000c
-/* HASH Receive DMA Address Mode:   fix | increment */
-#define RK_CRYPTO_HR_ADDR_MODE		BIT(8)
-/* Block Transmit DMA Address Mode: fix | increment */
-#define RK_CRYPTO_BT_ADDR_MODE		BIT(7)
-/* Block Receive DMA Address Mode:  fix | increment */
-#define RK_CRYPTO_BR_ADDR_MODE		BIT(6)
-#define RK_CRYPTO_BYTESWAP_HRFIFO	BIT(5)
-#define RK_CRYPTO_BYTESWAP_BTFIFO	BIT(4)
-#define RK_CRYPTO_BYTESWAP_BRFIFO	BIT(3)
-/* AES = 0 OR DES = 1 */
-#define RK_CRYPTO_DESSEL				BIT(2)
-#define RK_CYYPTO_HASHINSEL_INDEPENDENT_SOURCE		_SBF(0x00, 0)
-#define RK_CYYPTO_HASHINSEL_BLOCK_CIPHER_INPUT		_SBF(0x01, 0)
-#define RK_CYYPTO_HASHINSEL_BLOCK_CIPHER_OUTPUT		_SBF(0x02, 0)
-
-/* Block Receiving DMA Start Address Register */
-#define RK_CRYPTO_BRDMAS		0x0010
-/* Block Transmitting DMA Start Address Register */
-#define RK_CRYPTO_BTDMAS		0x0014
-/* Block Receiving DMA Length Register */
-#define RK_CRYPTO_BRDMAL		0x0018
-/* Hash Receiving DMA Start Address Register */
-#define RK_CRYPTO_HRDMAS		0x001c
-/* Hash Receiving DMA Length Register */
-#define RK_CRYPTO_HRDMAL		0x0020
-
-/* AES registers */
-#define RK_CRYPTO_AES_CTRL			  0x0080
-#define RK_CRYPTO_AES_BYTESWAP_CNT	BIT(11)
-#define RK_CRYPTO_AES_BYTESWAP_KEY	BIT(10)
-#define RK_CRYPTO_AES_BYTESWAP_IV	BIT(9)
-#define RK_CRYPTO_AES_BYTESWAP_DO	BIT(8)
-#define RK_CRYPTO_AES_BYTESWAP_DI	BIT(7)
-#define RK_CRYPTO_AES_KEY_CHANGE	BIT(6)
-#define RK_CRYPTO_AES_ECB_MODE		_SBF(0x00, 4)
-#define RK_CRYPTO_AES_CBC_MODE		_SBF(0x01, 4)
-#define RK_CRYPTO_AES_CTR_MODE		_SBF(0x02, 4)
-#define RK_CRYPTO_AES_128BIT_key	_SBF(0x00, 2)
-#define RK_CRYPTO_AES_192BIT_key	_SBF(0x01, 2)
-#define RK_CRYPTO_AES_256BIT_key	_SBF(0x02, 2)
-/* Slave = 0 / fifo = 1 */
-#define RK_CRYPTO_AES_FIFO_MODE		BIT(1)
-/* Encryption = 0 , Decryption = 1 */
-#define RK_CRYPTO_AES_DEC		BIT(0)
-
-#define RK_CRYPTO_AES_STS		0x0084
-#define RK_CRYPTO_AES_DONE		BIT(0)
-
-/* AES Input Data 0-3 Register */
-#define RK_CRYPTO_AES_DIN_0		0x0088
-#define RK_CRYPTO_AES_DIN_1		0x008c
-#define RK_CRYPTO_AES_DIN_2		0x0090
-#define RK_CRYPTO_AES_DIN_3		0x0094
-
-/* AES output Data 0-3 Register */
-#define RK_CRYPTO_AES_DOUT_0		0x0098
-#define RK_CRYPTO_AES_DOUT_1		0x009c
-#define RK_CRYPTO_AES_DOUT_2		0x00a0
-#define RK_CRYPTO_AES_DOUT_3		0x00a4
-
-/* AES IV Data 0-3 Register */
-#define RK_CRYPTO_AES_IV_0		0x00a8
-#define RK_CRYPTO_AES_IV_1		0x00ac
-#define RK_CRYPTO_AES_IV_2		0x00b0
-#define RK_CRYPTO_AES_IV_3		0x00b4
-
-/* AES Key Data 0-3 Register */
-#define RK_CRYPTO_AES_KEY_0		0x00b8
-#define RK_CRYPTO_AES_KEY_1		0x00bc
-#define RK_CRYPTO_AES_KEY_2		0x00c0
-#define RK_CRYPTO_AES_KEY_3		0x00c4
-#define RK_CRYPTO_AES_KEY_4		0x00c8
-#define RK_CRYPTO_AES_KEY_5		0x00cc
-#define RK_CRYPTO_AES_KEY_6		0x00d0
-#define RK_CRYPTO_AES_KEY_7		0x00d4
-
-/* des/tdes */
-#define RK_CRYPTO_TDES_CTRL		0x0100
-#define RK_CRYPTO_TDES_BYTESWAP_KEY	BIT(8)
-#define RK_CRYPTO_TDES_BYTESWAP_IV	BIT(7)
-#define RK_CRYPTO_TDES_BYTESWAP_DO	BIT(6)
-#define RK_CRYPTO_TDES_BYTESWAP_DI	BIT(5)
-/* 0: ECB, 1: CBC */
-#define RK_CRYPTO_TDES_CHAINMODE_CBC	BIT(4)
-/* TDES Key Mode, 0 : EDE, 1 : EEE */
-#define RK_CRYPTO_TDES_EEE		BIT(3)
-/* 0: DES, 1:TDES */
-#define RK_CRYPTO_TDES_SELECT		BIT(2)
-/* 0: Slave, 1:Fifo */
-#define RK_CRYPTO_TDES_FIFO_MODE	BIT(1)
-/* Encryption = 0 , Decryption = 1 */
-#define RK_CRYPTO_TDES_DEC		BIT(0)
-
-#define RK_CRYPTO_TDES_STS		0x0104
-#define RK_CRYPTO_TDES_DONE		BIT(0)
-
-#define RK_CRYPTO_TDES_DIN_0		0x0108
-#define RK_CRYPTO_TDES_DIN_1		0x010c
-#define RK_CRYPTO_TDES_DOUT_0		0x0110
-#define RK_CRYPTO_TDES_DOUT_1		0x0114
-#define RK_CRYPTO_TDES_IV_0		0x0118
-#define RK_CRYPTO_TDES_IV_1		0x011c
-#define RK_CRYPTO_TDES_KEY1_0		0x0120
-#define RK_CRYPTO_TDES_KEY1_1		0x0124
-#define RK_CRYPTO_TDES_KEY2_0		0x0128
-#define RK_CRYPTO_TDES_KEY2_1		0x012c
-#define RK_CRYPTO_TDES_KEY3_0		0x0130
-#define RK_CRYPTO_TDES_KEY3_1		0x0134
-
-/* HASH */
-#define RK_CRYPTO_HASH_CTRL		0x0180
-#define RK_CRYPTO_HASH_SWAP_DO		BIT(3)
-#define RK_CRYPTO_HASH_SWAP_DI		BIT(2)
-#define RK_CRYPTO_HASH_SHA1		_SBF(0x00, 0)
-#define RK_CRYPTO_HASH_MD5		_SBF(0x01, 0)
-#define RK_CRYPTO_HASH_SHA256		_SBF(0x02, 0)
-#define RK_CRYPTO_HASH_PRNG		_SBF(0x03, 0)
-
-#define RK_CRYPTO_HASH_STS		0x0184
-#define RK_CRYPTO_HASH_DONE		BIT(0)
-
-#define RK_CRYPTO_HASH_MSG_LEN		0x0188
-#define RK_CRYPTO_HASH_DOUT_0		0x018c
-#define RK_CRYPTO_HASH_DOUT_1		0x0190
-#define RK_CRYPTO_HASH_DOUT_2		0x0194
-#define RK_CRYPTO_HASH_DOUT_3		0x0198
-#define RK_CRYPTO_HASH_DOUT_4		0x019c
-#define RK_CRYPTO_HASH_DOUT_5		0x01a0
-#define RK_CRYPTO_HASH_DOUT_6		0x01a4
-#define RK_CRYPTO_HASH_DOUT_7		0x01a8
-
-#define CRYPTO_READ(dev, offset)		  \
-		readl_relaxed(((dev)->reg + (offset)))
-#define CRYPTO_WRITE(dev, offset, val)	  \
-		writel_relaxed((val), ((dev)->reg + (offset)))
-
-struct gemini_crypto_info {
-	struct device			*dev;
-	struct clk			*aclk;
-	struct clk			*hclk;
-	struct clk			*sclk;
-	struct clk			*dmaclk;
-	struct reset_control		*rst;
-	void __iomem			*reg;
-	int				irq;
-	struct crypto_queue		queue;
-	struct tasklet_struct		queue_task;
-	struct tasklet_struct		done_task;
-	struct crypto_async_request	*async_req;
-	int 				err;
-	/* device lock */
-	spinlock_t			lock;
-
-	/* the public variable */
-	struct scatterlist		*sg_src;
-	struct scatterlist		*sg_dst;
-	struct scatterlist		sg_tmp;
-	struct scatterlist		*first;
-	unsigned int			left_bytes;
-	void				*addr_vir;
-	int				aligned;
-	int				align_size;
-	size_t				nents;
-	unsigned int			total;
-	unsigned int			count;
-	dma_addr_t			addr_in;
-	dma_addr_t			addr_out;
-	bool				busy;
-	int (*start)(struct gemini_crypto_info *dev);
-	int (*update)(struct gemini_crypto_info *dev);
-	void (*complete)(struct crypto_async_request *base, int err);
-	int (*enable_clk)(struct gemini_crypto_info *dev);
-	void (*disable_clk)(struct gemini_crypto_info *dev);
-	int (*load_data)(struct gemini_crypto_info *dev,
-			 struct scatterlist *sg_src,
-			 struct scatterlist *sg_dst);
-	void (*unload_data)(struct gemini_crypto_info *dev);
-	int (*enqueue)(struct gemini_crypto_info *dev,
-		       struct crypto_async_request *async_req);
-};
-
-
-
-#endif // 0
 
 struct gemini_crypto_info {
 	void __iomem		*base;
@@ -630,7 +532,7 @@ struct gemini_crypto_info {
 
 /* the private variable of hash */
 struct gemini_ahash_ctx {
-	struct gemini_crypto_info		*dev;
+	struct gemini_crypto_info	*dev;
 	/* for fallback */
 	struct crypto_ahash		*fallback_tfm;
 };
@@ -643,9 +545,12 @@ struct gemini_ahash_rctx {
 
 /* the private variable of cipher */
 struct gemini_cipher_ctx {
-	struct gemini_crypto_info		*dev;
+	struct gemini_crypto_info	*secdev;
 	unsigned int			keylen;
 	u32				mode;
+	CRYPTO_CIPHER_CBC_T       	cbc;
+	CRYPTO_CIPHER_ECB_T       	ecb;
+	struct crypto_skcipher		*fallback;
 };
 
 enum alg_type {
@@ -661,6 +566,12 @@ struct gemini_crypto_tmp {
 	} alg;
 	enum alg_type			type;
 };
+
+void crypto_hw_cipher(struct gemini_crypto_info *secdev, unsigned char *ctrl_pkt,int ctrl_len,
+	struct scatterlist *data_pkt, int data_len, unsigned int tqflag,
+	unsigned char *out_pkt,int *out_len );
+int crypto_hw_process(struct CRYPTO_PACKET_S  *op_info);
+
 
 extern struct gemini_crypto_tmp gemini_ecb_aes_alg;
 extern struct gemini_crypto_tmp gemini_cbc_aes_alg;

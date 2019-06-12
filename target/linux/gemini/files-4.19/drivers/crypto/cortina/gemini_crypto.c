@@ -371,7 +371,7 @@ static void gemini_crypto_start_dma(struct gemini_crypto_info *secdev)
 }
 
 
-void ipsec_hw_cipher(struct gemini_crypto_info *secdev, unsigned char *ctrl_pkt,int ctrl_len,
+void crypto_hw_cipher(struct gemini_crypto_info *secdev, unsigned char *ctrl_pkt,int ctrl_len,
 	struct scatterlist *data_pkt, int data_len, unsigned int tqflag,
 	unsigned char *out_pkt,int *out_len )
 {
@@ -394,6 +394,11 @@ void ipsec_hw_cipher(struct gemini_crypto_info *secdev, unsigned char *ctrl_pkt,
 		if( !gemini_interrupt_polling(secdev) )
 			dev_err(secdev->dev, "%s: interrupt polling failed.\n",__func__);
 	}
+}
+
+int crypto_hw_process(struct CRYPTO_PACKET_S  *op_info)
+{
+
 }
 
 
