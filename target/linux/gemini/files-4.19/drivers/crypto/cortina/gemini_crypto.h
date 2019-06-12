@@ -40,6 +40,11 @@ enum CRYPTO_DMA_REGISTER {
 	CRYPTO_RXDMA_BUF_SIZE	= 0xff30,
 };
 
+/* define owner bit */
+enum CRYPTO_OWN_BIT {
+    CPU = 0,
+    DMA	= 1
+};   
 
 /******************************************************/
 /* the field definition of CRYPTO DMA Module Register  */
@@ -335,6 +340,42 @@ typedef struct CRYPTO_S
 	dma_addr_t          tx_bufs_dma;    /* physical TX descriptor address */
 } CRYPTO_T;
 
+struct CRYPTO_PACKET_S
+{
+    unsigned int    op_mode;            /* CIPHER_ENC(1),CIPHER_DEC(3),AUTH(4),ENC_AUTH(5),AUTH_DEC(7) */
+    unsigned int    cipher_algorithm;   /* ECB_DES(0),ECB_3DES(1),ECB_AES(2),CBC_DES(4),CBC_3DES(5),CBC_AES(6) */
+    unsigned int    auth_algorithm;     /* SHA1(0),MD5(1),HMAC_SHA1(2),HMAC_MD5(3),FCS(4) */
+    unsigned int    auth_result_mode;   /* AUTH_APPEND(0),AUTH_CHKVAL(1) */
+    unsigned int    process_id;         /* Used to identify the process */
+    unsigned int    auth_header_len;    /* Header length to be skipped by the authenticator */
+    unsigned int    auth_algorithm_len; /* Length of message body that is to be authenticated */
+    unsigned int    cipher_header_len;  /* Header length to be skipped by the cipher */
+    unsigned int    cipher_algorithm_len;   /* Length of message body to be encrypted or decrypted */
+    unsigned char   iv[16];             /* Initial vector used for DES,3DES,AES */
+    unsigned int    iv_size;            /* Initial vector size */
+    unsigned char   auth_key[64];       /* authentication key */
+    unsigned int    auth_key_size;      /* authentication key size */
+    unsigned char   cipher_key[32];     /* cipher key */
+    unsigned int    cipher_key_size;    /* cipher key size */
+    struct scatterlist *in_packet;         /* input_packet buffer pointer */
+    //unsigned char		*in_packet;         /* input_packet buffer pointer */
+    unsigned int    pkt_len;            /* input total packet length */
+    unsigned char   auth_checkval[20];  /* Authentication check value/FCS check value */
+    struct CRYPTO_PACKET_S *next,*prev;        /* pointer to next/previous operation to perform on buffer */
+    void (*callback)(struct CRYPTO_PACKET_S *); /* function to call when done authentication/cipher */ 
+    unsigned char   *out_packet;        /* output_packet buffer pointer */
+    //struct scatterlist *out_packet;        /* output_packet buffer pointer */
+    unsigned int    out_pkt_len;        /* output total packet length */
+    unsigned int    auth_cmp_result;    /* authentication compare result */
+    unsigned int    checksum;           /* checksum value */
+    unsigned int    status;             /* ipsec return status. 0:success, others:fail */
+//#if (IPSEC_TEST == 1)          
+//    unsigned char    *sw_packet;         /* for test only */
+//    unsigned int    sw_pkt_len;         /* for test only */
+//#endif    
+} ;
+
+typedef struct CRYPTO_PACKET_S qhead;
 
 #if 0
 #define _SBF(v, f)			((v) << (f))
@@ -556,29 +597,35 @@ struct gemini_crypto_info {
 #endif // 0
 
 struct gemini_crypto_info {
-	void __iomem			*base;
-	struct device			*dev;
-	struct clk			*pclk;
-	int				irq;
+	void __iomem		*base;
+	struct device		*dev;
+	struct clk		*pclk;
+	int			irq;
 
-	struct aes_txdesc		*tx;
-	struct aes_rxdesc		*rx;
-	dma_addr_t			phy_tx;
-	dma_addr_t			phy_rx;
-	dma_addr_t			phy_rec;
+//	struct aes_txdesc	*tx;
+//	struct aes_rxdesc	*rx;
+//	dma_addr_t		phy_tx;
+//	dma_addr_t		phy_rx;
+//	dma_addr_t		phy_rec;
+//	struct list_head	aes_list;
+	unsigned int     	tx_desc_virtual_base;
+	unsigned int     	rx_desc_virtual_base;
 
-	struct list_head		aes_list;
 
-	struct tasklet_struct		done_tasklet;
-	unsigned int			rec_front_idx;
-	unsigned int			rec_rear_idx;
-	struct mtk_dma_rec		*rec;
-	unsigned int			count;
-	spinlock_t			lock;
-	spinlock_t			irq_lock;
-	spinlock_t			tx_lock;
-	unsigned int			polling_flag;
+	struct tasklet_struct	done_tasklet;
+//	unsigned int		rec_front_idx;
+//	unsigned int		rec_rear_idx;
+//	struct mtk_dma_rec	*rec;
+//	unsigned int		count;
+	spinlock_t		lock;
+	spinlock_t		irq_lock;
+	spinlock_t		tx_lock;
+	spinlock_t		queue_lock;
+	unsigned int		polling_flag;
+	int			polling_process_id;
 
+	CRYPTO_T		*tp;
+	qhead			*queue;
 };
 
 /* the private variable of hash */

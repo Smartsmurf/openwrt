@@ -24,9 +24,10 @@
 #define gemini_crypto_write_reg(base, offset, data)     (writel(data, base + offset))
 
 #define MAX_POLLING_LOOPS 40000
+#define TX_BUF_SIZE 2048
 
 // static unsigned int polling_flag = 0;
-static int polling_process_id = -1;
+// static int polling_process_id = -1;
 static unsigned int flag_tasklet_scheduled = 0;
 
 static void gemini_crypto_write_mask(void __iomem *addr,unsigned int data,unsigned int bit_mask)
@@ -89,14 +90,203 @@ static irqreturn_t gemini_crypto_irq_handle(int irq, void *dev_id)
 */
 }
 
+static void ipsec_put_queue(struct gemini_crypto_info *secdev, struct CRYPTO_PACKET_S *i)
+{
+	qhead *q = secdev->queue;
+	unsigned long flags;
+
+	spin_lock_irqsave(&secdev->queue_lock, flags);
+
+	i->next = q->next;
+	i->prev = q;
+	q->next->prev = i;
+	q->next = i;
+
+	spin_unlock_irqrestore(&secdev->queue_lock, flags);
+	return;
+}
+
+ 
+
+static struct CRYPTO_PACKET_S * ipsec_get_queue(struct gemini_crypto_info *secdev)
+{
+	qhead *q = secdev->queue;
+	struct CRYPTO_PACKET_S *i;
+	unsigned long flags;
+
+	if(q->prev == q)
+	{
+		return NULL;
+	}
+
+	spin_lock_irqsave(&secdev->queue_lock, flags);
+	i = q->prev;
+	q->prev = i->prev;
+	i->prev->next = i->next;
+
+	spin_unlock_irqrestore(&secdev->queue_lock, flags);
+
+	i->next = i->prev = NULL;
+	return i;
+}
+
 static int gemini_crypto_rx_packet(struct gemini_crypto_info *secdev, unsigned int mode)
 {
+	CRYPTO_DESCRIPTOR_T	*rx_desc = secdev->tp->rx_cur_desc ;
+	struct CRYPTO_PACKET_S	*op_info ;
+	unsigned int		pkt_len;
+	unsigned int            desc_count;
+	unsigned int            process_id;
+	unsigned int            auth_cmp_result;
+	unsigned int            checksum = 0;
+	unsigned int            i;
+
+    for (;;)
+    {
+        if (rx_desc->frame_ctrl.bits.own == CPU)
+    	{
+    	    if ( (rx_desc->frame_ctrl.bits.derr==1)||(rx_desc->frame_ctrl.bits.perr==1) )
+    	    {
+    	        dev_err(secdev->dev,"%s : descriptor processing error\n",__func__);
+    	    }
+    	    pkt_len = rx_desc->flag_status.bits_rx_status.frame_count;  /* total byte count in a frame*/
+            process_id = rx_desc->flag_status.bits_rx_status.process_id; /* get process ID from descriptor */
+            auth_cmp_result = rx_desc->flag_status.bits_rx_status.auth_result;
+            // wep_crc_ok = rx_desc->flag_status.bits_rx_status.wep_crc_ok;
+            // tkip_mic_ok = rx_desc->flag_status.bits_rx_status.tkip_mic_ok;
+            // ccmp_mic_ok = rx_desc->flag_status.bits_rx_status.ccmp_mic_ok;
+    	    desc_count = rx_desc->frame_ctrl.bits.desc_count; /* get descriptor count per frame */ 
+    	} else {
+    	    return 0;
+    	}    
+
+        /* get request information from queue */
+        if ((op_info = ipsec_get_queue(secdev)) != NULL){
+//    printk("%s : ipsec_get_queue op_info->process_id=%d pkt_len=%d\n",__func__,op_info->process_id,op_info->pkt_len);
+            /* fill request result */
+		// consistent_sync(op_info->out_packet,pkt_len,DMA_BIDIRECTIONAL);
+		op_info->out_pkt_len = pkt_len;
+		op_info->auth_cmp_result = auth_cmp_result;
+		op_info->checksum = checksum;
+		op_info->status = 0;
+    		
+		//if(op_info->auth_result_mode)
+		//	op_info->out_pkt_len-=0x10;
+		//if ((op_info->out_pkt_len != op_info->pkt_len) || (op_info->process_id != process_id))
+		if ((op_info->process_id != process_id)){
+			op_info->status = 2;
+			dev_info(secdev->dev,"op_info->out_pkt_len =%x , op_info->pkt_len= %x\n",
+				op_info->out_pkt_len,op_info->pkt_len);
+			dev_err(secdev->dev, "%s: Process ID or Packet Length Error %d %d !\n",__func__,
+				op_info->process_id,process_id);
+		}
+	} else {
+	    op_info->status = 1;
+	    dev_warn(secdev->dev,"%s:IPSec Queue Empty!\n", __func__);
+	}    
+    
+	for (i=0; i<desc_count; i++)
+	{
+		/* return RX descriptor to DMA */
+		rx_desc->frame_ctrl.bits.own = DMA;
+		/* get next RX descriptor pointer */
+		rx_desc  = (CRYPTO_DESCRIPTOR_T *)(rx_desc->next_desc.next_descriptor & 0xfffffff0);
+		rx_desc += secdev->rx_desc_virtual_base;
+	}
+	secdev->tp->rx_cur_desc = rx_desc;
+//        wake_up_interruptible(&ipsec_wait_q);
+    
+        /* to call callback function */
+        //if (op_info > 0)
+        //{
+        //    if (op_info->callback)
+        //    {
+        //        op_info->callback(op_info);
+        //    }    
+        //}
+    }           
+
 	return 1;
 }
 
 static int gemini_crypto_tx_packet(struct gemini_crypto_info *secdev, struct scatterlist *packet, 
 	int len, unsigned int tqflag)
 {
+	CRYPTO_DESCRIPTOR_T	        *tx_desc = secdev->tp->tx_cur_desc;
+//	CRYPTO_TXDMA_CTRL_T		    tx_ctrl,tx_ctrl_mask;
+//	CRYPTO_RXDMA_CTRL_T		    rx_ctrl,rx_ctrl_mask;
+	CRYPTO_TXDMA_FIRST_DESC_T	txdma_busy;
+	unsigned int                desc_cnt;
+	unsigned int                i,tmp_len;
+	unsigned int                sof;
+	unsigned int                last_desc_byte_cnt;
+	unsigned char               *pkt_ptr;
+	unsigned int                reg_val;
+
+
+	if (tx_desc->frame_ctrl.bits.own != CPU){
+		dev_err(secdev->dev,"\n%s : Tx descriptor error (1)\n",__func__);
+        	gemini_crypto_read_reg(secdev->base, CRYPTO_ID);
+	}
+	return 1;
+
+	sof = 0x02; /* the first descriptor */
+	desc_cnt = (len/TX_BUF_SIZE) ;
+	last_desc_byte_cnt = len % TX_BUF_SIZE;
+
+	tmp_len=0;i=0;
+	while(tmp_len < len){
+		tx_desc->frame_ctrl.bits32 = 0;
+		tx_desc->flag_status.bits32 = 0;
+	   
+		tx_desc->frame_ctrl.bits.buffer_size = packet[i].length; /* descriptor byte count */
+		tx_desc->flag_status.bits_tx_flag.tqflag = tqflag;    /* set tqflag */
+
+		//pkt_ptr = kmap(packet[i].page) + packet[i].offset;
+		//consistent_sync(pkt_ptr,packet[i].length,PCI_DMA_TODEVICE);
+		//pkt_ptr = (unsigned char *)virt_to_phys(pkt_ptr);  //__pa(packet);  
+		//tx_desc->buf_adr = (unsigned int)pkt_ptr;
+        	tx_desc->buf_adr = sg_phys(&packet[i]);
+
+		if ( (packet[i].length == len) && i==0 ){
+			sof = 0x03; /*only one descriptor*/
+		} else if ( ((packet[i].length + tmp_len)== len) && (i != 0) ){
+			sof = 0x01; /*the last descriptor*/
+		}
+		tx_desc->next_desc.bits.eofie = 1;
+		tx_desc->next_desc.bits.dec = 0;
+		tx_desc->next_desc.bits.sof_eof = sof;
+		if (sof==0x02){
+			sof = 0x00; /* the linking descriptor */
+		}
+
+		wmb();
+
+		//middle
+		tmp_len+=packet[i].length;
+		i++;
+		/* set owner bit */
+		tx_desc->frame_ctrl.bits.own = DMA;
+	        tx_desc  = (CRYPTO_DESCRIPTOR_T *)(tx_desc->next_desc.next_descriptor & 0xfffffff0);
+		tx_desc += secdev->tx_desc_virtual_base;
+		if (tx_desc->frame_ctrl.bits.own != CPU){
+			dev_err(secdev->dev,"\n%s : Tx descriptor error (2)\n",__func__);
+		}
+	}
+	secdev->tp->tx_cur_desc = tx_desc;
+	txdma_busy.bits32 = gemini_crypto_read_reg(secdev->base, CRYPTO_TXDMA_FIRST_DESC);
+	if (txdma_busy.bits.td_busy == 0)
+	{
+		/* restart Rx DMA process */
+		reg_val = gemini_crypto_read_reg(secdev->base, CRYPTO_RXDMA_CTRL);
+		reg_val |= (0x03<<30);
+		gemini_crypto_write_reg(secdev->base, CRYPTO_RXDMA_CTRL, reg_val);
+
+		/* restart Tx DMA process */
+		reg_val = gemini_crypto_read_reg(secdev->base, CRYPTO_TXDMA_CTRL);
+		reg_val |= (0x03<<30);
+		gemini_crypto_write_reg(secdev->base, CRYPTO_TXDMA_CTRL, reg_val);
+	}
 	return 1;
 }
 
@@ -181,24 +371,23 @@ static void gemini_crypto_start_dma(struct gemini_crypto_info *secdev)
 }
 
 
-void ipsec_hw_cipher(struct gemini_crypto_info *secdev, volatile unsigned char *ctrl_pkt,int ctrl_len,
-	volatile struct scatterlist *data_pkt, int data_len, unsigned int tqflag,
+void ipsec_hw_cipher(struct gemini_crypto_info *secdev, unsigned char *ctrl_pkt,int ctrl_len,
+	struct scatterlist *data_pkt, int data_len, unsigned int tqflag,
 	unsigned char *out_pkt,int *out_len )
 {
-	volatile struct	scatterlist sg[1];
+	struct	scatterlist sg[1];
 	unsigned long		flags;
 
 //	disable_irq(IRQ_IPSEC);
 	// https://stackoverflow.com/questions/41802779/scatterlist-in-linux-crypto-api
-
-	sg[0].page_link = (long)virt_to_page(ctrl_pkt);
-	sg[0].offset = offset_in_page(ctrl_pkt);
-	sg[0].length = ctrl_len;
-//	ipsec_tx_packet(ctrl_pkt,ctrl_len,tqflag);
+	sg_init_one(&sg[0], ctrl_pkt, ctrl_len);
+//	sg[0].page_link = (long)virt_to_page(ctrl_pkt);
+//	sg[0].offset = offset_in_page(ctrl_pkt);
+//	sg[0].length = ctrl_len;
 	spin_lock_irqsave(&secdev->tx_lock,flags);
 	gemini_crypto_tx_packet(secdev, sg, ctrl_len,tqflag);
 	gemini_crypto_tx_packet(secdev, data_pkt,data_len,0);
-	gemini_crypto_start_dma( secdev );
+	gemini_crypto_start_dma(secdev);
 	spin_unlock_irqrestore(&secdev->tx_lock,flags);
 
 	if (secdev->polling_flag) {
@@ -304,10 +493,12 @@ static int gemini_crypto_probe(struct platform_device *pdev)
 */
 
 	crypto_info->polling_flag = 0;
+	crypto_info->polling_process_id = -1;
 
 	spin_lock_init(&crypto_info->lock);
 	spin_lock_init(&crypto_info->tx_lock);
 	spin_lock_init(&crypto_info->irq_lock);
+	spin_lock_init(&crypto_info->queue_lock);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	crypto_info->base = devm_ioremap_resource(&pdev->dev, res);
@@ -341,7 +532,7 @@ static int gemini_crypto_probe(struct platform_device *pdev)
 
 	tasklet_init(&crypto_info->done_tasklet,
 		     gemini_crypto_done_task_cb, (unsigned long)crypto_info);
-//	crypto_init_queue(&crypto_info->queue, 50);
+	// crypto_init_queue(&crypto_info->queue, 50);
 
 	err = gemini_crypto_register(crypto_info);
 	if (err) {
