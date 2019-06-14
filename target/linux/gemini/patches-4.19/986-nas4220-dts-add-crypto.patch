@@ -4,7 +4,7 @@
  				<0x6000 0 0 4 &pci_intc 2>;
  		};
  
-+		crypto@51000000 {
++		crypto@62000000 {
 +			status = "okay";
 +		};
 +

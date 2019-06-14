@@ -141,72 +141,111 @@ static int gemini_crypto_rx_packet(struct gemini_crypto_info *secdev, unsigned i
 	unsigned int            checksum = 0;
 	unsigned int            i;
 
-    for (;;)
-    {
-        if (rx_desc->frame_ctrl.bits.own == CPU)
-    	{
-    	    if ( (rx_desc->frame_ctrl.bits.derr==1)||(rx_desc->frame_ctrl.bits.perr==1) )
-    	    {
-    	        dev_err(secdev->dev,"%s : descriptor processing error\n",__func__);
-    	    }
-    	    pkt_len = rx_desc->flag_status.bits_rx_status.frame_count;  /* total byte count in a frame*/
-            process_id = rx_desc->flag_status.bits_rx_status.process_id; /* get process ID from descriptor */
-            auth_cmp_result = rx_desc->flag_status.bits_rx_status.auth_result;
-            // wep_crc_ok = rx_desc->flag_status.bits_rx_status.wep_crc_ok;
-            // tkip_mic_ok = rx_desc->flag_status.bits_rx_status.tkip_mic_ok;
-            // ccmp_mic_ok = rx_desc->flag_status.bits_rx_status.ccmp_mic_ok;
-    	    desc_count = rx_desc->frame_ctrl.bits.desc_count; /* get descriptor count per frame */ 
-    	} else {
-    	    return 0;
-    	}    
-
-        /* get request information from queue */
-        if ((op_info = ipsec_get_queue(secdev)) != NULL){
-//    printk("%s : ipsec_get_queue op_info->process_id=%d pkt_len=%d\n",__func__,op_info->process_id,op_info->pkt_len);
-            /* fill request result */
-		// consistent_sync(op_info->out_packet,pkt_len,DMA_BIDIRECTIONAL);
-		op_info->out_pkt_len = pkt_len;
-		op_info->auth_cmp_result = auth_cmp_result;
-		op_info->checksum = checksum;
-		op_info->status = 0;
-    		
-		//if(op_info->auth_result_mode)
-		//	op_info->out_pkt_len-=0x10;
-		//if ((op_info->out_pkt_len != op_info->pkt_len) || (op_info->process_id != process_id))
-		if ((op_info->process_id != process_id)){
-			op_info->status = 2;
-			dev_info(secdev->dev,"op_info->out_pkt_len =%x , op_info->pkt_len= %x\n",
-				op_info->out_pkt_len,op_info->pkt_len);
-			dev_err(secdev->dev, "%s: Process ID or Packet Length Error %d %d !\n",__func__,
-				op_info->process_id,process_id);
+	while ((count < rx_poll_num) || (secdev->polling_flag == 1)){
+		if ((rx_desc < 0xf0000000) || (rx_desc > 0xffffffff))
+			dev_warn(secdev->dev,"%s: descriptor address is out of range - 0x%x\n",__func__,rx_desc);
+		// consistent_sync((void *)rx_desc,sizeof(IPSEC_DESCRIPTOR_T),PCI_DMA_FROMDEVICE);
+		// debug message
+		if (rx_desc == NULL){
+			dev_err(secdev->dev,"%s: fatal error. rx_desc == NULL\n",__func__);
+			return -1;
 		}
-	} else {
-	    op_info->status = 1;
-	    dev_warn(secdev->dev,"%s:IPSec Queue Empty!\n", __func__);
-	}    
-    
-	for (i=0; i<desc_count; i++)
-	{
-		/* return RX descriptor to DMA */
-		rx_desc->frame_ctrl.bits.own = DMA;
-		/* get next RX descriptor pointer */
-		rx_desc  = (CRYPTO_DESCRIPTOR_T *)(rx_desc->next_desc.next_descriptor & 0xfffffff0);
-		rx_desc += secdev->rx_desc_virtual_base;
-	}
-	secdev->tp->rx_cur_desc = rx_desc;
-//        wake_up_interruptible(&ipsec_wait_q);
-    
-        /* to call callback function */
-        //if (op_info > 0)
-        //{
-        //    if (op_info->callback)
-        //    {
-        //        op_info->callback(op_info);
-        //    }    
-        //}
-    }           
+		if (rx_desc->frame_ctrl.bits.own == CPU){
+	    	    if ( (rx_desc->frame_ctrl.bits.derr==1)||(rx_desc->frame_ctrl.bits.perr==1) )
+	    	    {
+	    	        dev_err(secdev->dev,"%s : descriptor processing error\n",__func__);
+	    	    }
+	    	    pkt_len = rx_desc->flag_status.bits_rx_status.frame_count;  /* total byte count in a frame*/
+		    process_id = rx_desc->flag_status.bits_rx_status.process_id; /* get process ID from descriptor */
+		    auth_cmp_result = rx_desc->flag_status.bits_rx_status.auth_result;
+		    // wep_crc_ok = rx_desc->flag_status.bits_rx_status.wep_crc_ok;
+		    // tkip_mic_ok = rx_desc->flag_status.bits_rx_status.tkip_mic_ok;
+		    // ccmp_mic_ok = rx_desc->flag_status.bits_rx_status.ccmp_mic_ok;
+	    	    desc_count = rx_desc->frame_ctrl.bits.desc_count; /* get descriptor count per frame */ 
+	    	} else {
+	    	    return count;
+	    	}    
 
-	return 1;
+
+		if (last_rx_pid == process_id){
+			dev_err(secdev->dev, "error: last_rx_pid = %d, process_id = %d\n",last_rx_pid,process_id);
+//			spin_unlock_irqrestore(&ipsec_rx_lock,flags_a);
+			rx_desc->frame_ctrl.bits.own = DMA;
+			tp->rx_finished_desc = rx_desc;
+			/* get next RX descriptor pointer */
+			rx_desc = (CRYPTO_DESCRIPTOR_T *)((rx_desc->next_desc.next_descriptor & 0xfffffff0)+rx_desc_virtual_base);
+			tp->rx_cur_desc = rx_desc;
+			return -1;
+		}
+
+		if (process_id != 256)
+			last_rx_pid = process_id;
+
+
+		/* get request information from queue */
+		if ((op_info = ipsec_get_queue(secdev)) != NULL){
+			//    printk("%s : ipsec_get_queue op_info->process_id=%d pkt_len=%d\n",__func__,op_info->process_id,op_info->pkt_len);
+		    	/* fill request result */
+			// consistent_sync(op_info->out_packet,pkt_len,DMA_BIDIRECTIONAL);
+			op_info->out_pkt_len = pkt_len;
+			op_info->auth_cmp_result = auth_cmp_result;
+			op_info->checksum = checksum;
+			op_info->status = 0;
+	    		
+			// problme might be caused by prefetch and cache.
+			mb();
+			if ((op_info->out_packet < 0xc0000000) || (op_info->out_packet >= 0xd0000000))
+				dev_warn(secdev->dev, "%s::op_info->out_packet address is out of range? 0x%x\n",__func__,op_info->out_packet);
+			// consistent_sync((void *)op_info->out_packet,pkt_len,PCI_DMA_FROMDEVICE);
+			mb();
+
+			//if(op_info->auth_result_mode)
+			//	op_info->out_pkt_len-=0x10;
+			//if ((op_info->out_pkt_len != op_info->pkt_len) || (op_info->process_id != process_id))
+			if ((op_info->process_id != process_id)){
+				op_info->status = 2;
+				dev_info(secdev->dev,"op_info->out_pkt_len =%x , op_info->pkt_len= %x\n",
+					op_info->out_pkt_len,op_info->pkt_len);
+				dev_err(secdev->dev, "%s: Process ID or Packet Length Error %d %d !\n",__func__,
+					op_info->process_id,process_id);
+			}
+			if ((polling_flag == 1 ) && ((int)process_id == polling_process_id)) {
+				spin_lock_irqsave(&ipsec_polling_lock,flags);
+				polling_flag = 0;
+				polling_process_id = -1;
+				spin_unlock_irqrestore(&ipsec_polling_lock,flags);
+			}
+		} else {
+		    // op_info->status = 1;
+		    dev_warn(secdev->dev,"%s:IPSec Queue Empty!\n", __func__);
+		}    
+    		count++;
+		for (i=0; i<desc_count; i++)
+		{
+			/* return RX descriptor to DMA */
+			rx_desc->frame_ctrl.bits.own = DMA;
+			/* get next RX descriptor pointer */
+			rx_desc  = (CRYPTO_DESCRIPTOR_T *)(rx_desc->next_desc.next_descriptor & 0xfffffff0);
+			rx_desc += secdev->rx_desc_virtual_base;
+		}
+		secdev->tp->rx_cur_desc = rx_desc;
+	//        wake_up_interruptible(&ipsec_wait_q);
+	    
+	        /* to call callback function */
+		if (op_info > 0){
+			if (op_info->out_packet == NULL){
+				printk("%s::shouldn't happen!!!\n",__func__);
+				return -1;
+			}
+			// if callback exists, use callback function, if not. just skip it.
+			if (op_info->callback != NULL) {
+				op_info->flag_polling = secdev->polling_flag;
+				op_info->callback(op_info);
+			}
+		}
+	}           
+
+	return count;
 }
 
 static int gemini_crypto_tx_packet(struct gemini_crypto_info *secdev, struct scatterlist *packet, 
@@ -215,7 +254,7 @@ static int gemini_crypto_tx_packet(struct gemini_crypto_info *secdev, struct sca
 	CRYPTO_DESCRIPTOR_T	        *tx_desc = secdev->tp->tx_cur_desc;
 //	CRYPTO_TXDMA_CTRL_T		    tx_ctrl,tx_ctrl_mask;
 //	CRYPTO_RXDMA_CTRL_T		    rx_ctrl,rx_ctrl_mask;
-	CRYPTO_TXDMA_FIRST_DESC_T	txdma_busy;
+//	CRYPTO_TXDMA_FIRST_DESC_T	txdma_busy;
 	unsigned int                desc_cnt;
 	unsigned int                i,tmp_len;
 	unsigned int                sof;
@@ -225,10 +264,9 @@ static int gemini_crypto_tx_packet(struct gemini_crypto_info *secdev, struct sca
 
 
 	if (tx_desc->frame_ctrl.bits.own != CPU){
-		dev_err(secdev->dev,"\n%s : Tx descriptor error (1)\n",__func__);
+		dev_warn(secdev->dev,"\n%s : current Tx Descriptor is in use.\n",__func__);
         	gemini_crypto_read_reg(secdev->base, CRYPTO_ID);
 	}
-	return 1;
 
 	sof = 0x02; /* the first descriptor */
 	desc_cnt = (len/TX_BUF_SIZE) ;
@@ -274,6 +312,7 @@ static int gemini_crypto_tx_packet(struct gemini_crypto_info *secdev, struct sca
 		}
 	}
 	secdev->tp->tx_cur_desc = tx_desc;
+#if 0
 	txdma_busy.bits32 = gemini_crypto_read_reg(secdev->base, CRYPTO_TXDMA_FIRST_DESC);
 	if (txdma_busy.bits.td_busy == 0)
 	{
@@ -287,6 +326,7 @@ static int gemini_crypto_tx_packet(struct gemini_crypto_info *secdev, struct sca
 		reg_val |= (0x03<<30);
 		gemini_crypto_write_reg(secdev->base, CRYPTO_TXDMA_CTRL, reg_val);
 	}
+#endif
 	return 1;
 }
 
@@ -314,16 +354,15 @@ static int gemini_interrupt_polling(struct gemini_crypto_info *secdev)
 			gemini_crypto_write_mask(secdev->base + CRYPTO_DMA_STATUS,status.bits32,status.bits32);
 			break;
 		}
-	        if( secdev->polling_flag == 0){
-			dev_warn(secdev->dev, "polling flag has been turned off (2)\n");
-			return 0;
-		}
 	}
 	if( i >= MAX_POLLING_LOOPS ){
 		dev_err(secdev->dev, "FCS timeout while polling.\n");
 		return 0;
 	}
-
+        if( secdev->polling_flag == 0){
+		dev_warn(secdev->dev, "polling flag has been turned off (2)\n");
+		return 0;
+	}
 	if (status.bits.rs_eofi==1) {
 		gemini_crypto_rx_packet(secdev, 1);
 	}
@@ -346,7 +385,7 @@ static int gemini_interrupt_polling(struct gemini_crypto_info *secdev)
 			spin_unlock_irqrestore(&secdev->irq_lock,flags);
 		}
 	}
-	return 1;    
+	return 1;
 }
 
 static void gemini_crypto_start_dma(struct gemini_crypto_info *secdev)
