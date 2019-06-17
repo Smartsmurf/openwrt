@@ -29,7 +29,7 @@
  obj-y += hisilicon/
 --- a/arch/arm/boot/dts/gemini.dtsi	2019-06-06 14:00:03.500440000 +0200
 +++ b/arch/arm/boot/dts/gemini.dtsi	2019-06-07 10:29:44.859232214 +0200
-@@ -321,6 +321,16 @@
+@@ -356,6 +356,16 @@
  			};
  		};
  
@@ -43,7 +43,6 @@
 +			status = "disabled";
 +		};
 +
- 		ethernet@60000000 {
- 			compatible = "cortina,gemini-ethernet";
- 			reg = <0x60000000 0x4000>, /* Global registers, queue */
-
+ 		ata@63000000 {
+ 			compatible = "cortina,gemini-pata", "faraday,ftide010";
+ 			reg = <0x63000000 0x1000>;

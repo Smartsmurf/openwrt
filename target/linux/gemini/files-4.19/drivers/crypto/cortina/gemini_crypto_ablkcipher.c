@@ -51,12 +51,15 @@ static int gemini_aes_ecb_encrypt(struct ablkcipher_request *req)
 	struct crypto_ablkcipher *tfm = crypto_ablkcipher_reqtfm(req);
 	struct gemini_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
 	struct CRYPTO_CIPHER_ECB_S *ecb = &ctx->ecb;
+	int	ret;
 
 	ecb->control.bits.op_mode = CIPHER_ENC;
 	ecb->control.bits.cipher_algorithm = ECB_AES;
 	ecb->control.bits.process_id = 0;
 
-	return 1;
+	ret = crypto_hw_process(ctx->secdev, ctx->op);
+
+	return ret;
 }
 
 static int gemini_aes_ecb_decrypt(struct ablkcipher_request *req)

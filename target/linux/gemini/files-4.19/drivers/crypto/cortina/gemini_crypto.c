@@ -24,6 +24,8 @@
 #define gemini_crypto_write_reg(base, offset, data)     (writel(data, base + offset))
 
 #define MAX_POLLING_LOOPS 40000
+#define RX_POLL_NUM 10
+#define RX_BUF_SIZE 8192
 #define TX_BUF_SIZE 2048
 
 // static unsigned int polling_flag = 0;
@@ -90,7 +92,7 @@ static irqreturn_t gemini_crypto_irq_handle(int irq, void *dev_id)
 */
 }
 
-static void ipsec_put_queue(struct gemini_crypto_info *secdev, struct CRYPTO_PACKET_S *i)
+static void crypto_put_queue(struct gemini_crypto_info *secdev, struct CRYPTO_PACKET_S *i)
 {
 	qhead *q = secdev->queue;
 	unsigned long flags;
@@ -140,10 +142,12 @@ static int gemini_crypto_rx_packet(struct gemini_crypto_info *secdev, unsigned i
 	unsigned int            auth_cmp_result;
 	unsigned int            checksum = 0;
 	unsigned int            i;
+	unsigned long		flags;
+	unsigned int		count = 0;
 
-	while ((count < rx_poll_num) || (secdev->polling_flag == 1)){
-		if ((rx_desc < 0xf0000000) || (rx_desc > 0xffffffff))
-			dev_warn(secdev->dev,"%s: descriptor address is out of range - 0x%x\n",__func__,rx_desc);
+	while ((count < RX_POLL_NUM) || (secdev->polling_flag == 1)){
+		if (((unsigned long)rx_desc < 0xf0000000) || ((unsigned long)rx_desc > 0xffffffff))
+			dev_warn(secdev->dev,"%s: descriptor address is out of range - 0x%p\n",__func__,rx_desc);
 		// consistent_sync((void *)rx_desc,sizeof(IPSEC_DESCRIPTOR_T),PCI_DMA_FROMDEVICE);
 		// debug message
 		if (rx_desc == NULL){
@@ -167,19 +171,20 @@ static int gemini_crypto_rx_packet(struct gemini_crypto_info *secdev, unsigned i
 	    	}    
 
 
-		if (last_rx_pid == process_id){
-			dev_err(secdev->dev, "error: last_rx_pid = %d, process_id = %d\n",last_rx_pid,process_id);
+		if (secdev->last_rx_pid == process_id){
+			dev_err(secdev->dev, "last_rx_pid = process_id = %d\n",process_id);
 //			spin_unlock_irqrestore(&ipsec_rx_lock,flags_a);
 			rx_desc->frame_ctrl.bits.own = DMA;
-			tp->rx_finished_desc = rx_desc;
+			secdev->tp->rx_finished_desc = rx_desc;
 			/* get next RX descriptor pointer */
-			rx_desc = (CRYPTO_DESCRIPTOR_T *)((rx_desc->next_desc.next_descriptor & 0xfffffff0)+rx_desc_virtual_base);
-			tp->rx_cur_desc = rx_desc;
+			rx_desc = (CRYPTO_DESCRIPTOR_T *)(rx_desc->next_desc.next_descriptor & 0xfffffff0);
+			rx_desc += secdev->rx_desc_virtual_base;
+			secdev->tp->rx_cur_desc = rx_desc;
 			return -1;
 		}
 
 		if (process_id != 256)
-			last_rx_pid = process_id;
+			secdev->last_rx_pid = process_id;
 
 
 		/* get request information from queue */
@@ -194,8 +199,9 @@ static int gemini_crypto_rx_packet(struct gemini_crypto_info *secdev, unsigned i
 	    		
 			// problme might be caused by prefetch and cache.
 			mb();
-			if ((op_info->out_packet < 0xc0000000) || (op_info->out_packet >= 0xd0000000))
-				dev_warn(secdev->dev, "%s::op_info->out_packet address is out of range? 0x%x\n",__func__,op_info->out_packet);
+			if (((unsigned long)(op_info->out_packet) <  0xc0000000) 
+			||  ((unsigned long)(op_info->out_packet) >= 0xd0000000))
+				dev_warn(secdev->dev, "%s::op_info->out_packet address is out of range? 0x%p\n",__func__,op_info->out_packet);
 			// consistent_sync((void *)op_info->out_packet,pkt_len,PCI_DMA_FROMDEVICE);
 			mb();
 
@@ -209,11 +215,11 @@ static int gemini_crypto_rx_packet(struct gemini_crypto_info *secdev, unsigned i
 				dev_err(secdev->dev, "%s: Process ID or Packet Length Error %d %d !\n",__func__,
 					op_info->process_id,process_id);
 			}
-			if ((polling_flag == 1 ) && ((int)process_id == polling_process_id)) {
-				spin_lock_irqsave(&ipsec_polling_lock,flags);
-				polling_flag = 0;
-				polling_process_id = -1;
-				spin_unlock_irqrestore(&ipsec_polling_lock,flags);
+			if ((secdev->polling_flag == 1 ) && ((int)process_id == secdev->polling_process_id)) {
+				spin_lock_irqsave(&secdev->polling_lock,flags);
+				secdev->polling_flag = 0;
+				secdev->polling_process_id = -1;
+				spin_unlock_irqrestore(&secdev->polling_lock,flags);
 			}
 		} else {
 		    // op_info->status = 1;
@@ -239,7 +245,7 @@ static int gemini_crypto_rx_packet(struct gemini_crypto_info *secdev, unsigned i
 			}
 			// if callback exists, use callback function, if not. just skip it.
 			if (op_info->callback != NULL) {
-				op_info->flag_polling = secdev->polling_flag;
+				// op_info->flag_polling = secdev->polling_flag;
 				op_info->callback(op_info);
 			}
 		}
@@ -435,9 +441,73 @@ void crypto_hw_cipher(struct gemini_crypto_info *secdev, unsigned char *ctrl_pkt
 	}
 }
 
-int crypto_hw_process(struct CRYPTO_PACKET_S  *op_info)
+int crypto_hw_process(struct gemini_crypto_info *secdev, struct CRYPTO_PACKET_S  *op_info)
 {
+	volatile CRYPTO_DESCRIPTOR_T  *rx_desc;
+	unsigned long flags, flags2, flags3;
+	volatile CRYPTO_RXDMA_CTRL_T	rxdma_ctrl;
+//	int available_space = desc_free_space();
+    
+	if (op_info == NULL) {
+		printk("%s::hm. op_info is null o_O?\n",__func__);
+		return -1;
+	}
 
+	// check if there is an available space for this crypto packet
+//	if (available_space < 1) {
+//		printk("%s::tx queue is full a\n",__func__);
+//		return -1;
+//	}
+
+	spin_lock_irqsave(&secdev->pid_lock,flags3);
+	op_info->process_id = (secdev->pid++) % 256;
+	spin_unlock_irqrestore(&secdev->pid_lock,flags3);
+
+	// first turn off the interrupt, such that there won't be conflict
+	spin_lock_irqsave(&secdev->irq_lock,flags2);
+	rxdma_ctrl.bits32 = crypto_read_reg(secdev->base, CRYPTO_RXDMA_CTRL);
+	rxdma_ctrl.bits.rd_eof_en = 0;
+	gemini_crypto_write_reg(secdev->base, CRYPTO_RXDMA_CTRL, rxdma_ctrl.bits32);
+	spin_unlock_irqrestore(&secdev->irq_lock,flags2);
+
+	// 2nd, turn on the polling flag.
+	spin_lock_irqsave(&secdev->polling_lock,flags);
+	polling_flag = 1;
+//	if (polling_process_id != -1)
+//		printk("current polling_process_id %d will be updated to %d, last_rx_pid = %d\n",
+//			polling_process_id, op_info->process_id, last_rx_pid);
+	secdev->polling_process_id = (int)(op_info->process_id);
+	spin_unlock_irqrestore(&secdev->polling_lock,flags);
+
+	/* get rx descriptor for this operation */
+	rx_desc = rx_desc_index[rx_index%IPSEC_RX_DESC_NUM];
+	/* set receive buffer address for this operation */
+//	consistent_sync(op_info->out_packet,op_info->pkt_len,PCI_DMA_TODEVICE);
+	rx_desc->buf_adr = __pa(op_info->out_packet); //virt_to_phys(op_info->out_packet);
+//	ipsec_write_reg(IPSEC_RXDMA_BUF_ADDR,rx_desc->buf_adr,0xffffffff);
+	unsigned int rxdma_desc = (crypto_read_reg(secdev->base, CRYPTO_RXDMA_CURR_DESC) & 0xfffffff0)+secdev->rx_desc_virtual_base;
+	if ((unsigned int)rx_desc == (unsigned int)rxdma_desc) {
+		gemini_crypto_write_reg(secdev->base, CRYPTO_RXDMA_BUF_ADDR, rx_desc->buf_adr);
+//		consistent_sync(rx_desc,sizeof(IPSEC_DESCRIPTOR_T),PCI_DMA_TODEVICE);
+	}
+
+	if (op_info->out_buffer_len)
+		rx_desc->frame_ctrl.bits.buffer_size = op_info->out_buffer_len;
+	else
+		rx_desc->frame_ctrl.bits.buffer_size = RX_BUF_SIZE;
+
+	rx_index++;
+	crypto_put_queue(secdev,op_info);
+
+	if ((op_info->op_mode==ENC_AUTH) || (op_info->op_mode==AUTH_DEC))
+	{
+	//	ipsec_auth_and_cipher(op_info);
+	}
+	else
+	{
+	//	ipsec_auth_or_cipher(op_info);
+	}
+	return 0;
 }
 
 
@@ -538,11 +608,15 @@ static int gemini_crypto_probe(struct platform_device *pdev)
 
 	crypto_info->polling_flag = 0;
 	crypto_info->polling_process_id = -1;
+	crypto_info->pid = 0;
+	crypto_info->last_rx_pid = 255;
 
 	spin_lock_init(&crypto_info->lock);
 	spin_lock_init(&crypto_info->tx_lock);
 	spin_lock_init(&crypto_info->irq_lock);
 	spin_lock_init(&crypto_info->queue_lock);
+	spin_lock_init(&crypto_info->polling_lock);
+	spin_lock_init(&crypto_info->pid_lock);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	crypto_info->base = devm_ioremap_resource(&pdev->dev, res);
@@ -587,7 +661,7 @@ static int gemini_crypto_probe(struct platform_device *pdev)
 	crypto_info->dev = &pdev->dev;
 	platform_set_drvdata(pdev, crypto_info);
 
-	reg = readl(crypto_info->base + CRYPTO_ID);
+	reg = gemini_crypto_read_reg(crypto_info->base, CRYPTO_ID);
 	dev_info(dev, "Crypto Accelerator (ID 0x%08x) successfully registered\n", reg);
 	return 0;
 

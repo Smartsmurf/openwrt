@@ -523,9 +523,12 @@ struct gemini_crypto_info {
 	spinlock_t		irq_lock;
 	spinlock_t		tx_lock;
 	spinlock_t		queue_lock;
+	spinlock_t		polling_lock;
+	spinlock_t		pid_lock;
 	unsigned int		polling_flag;
 	int			polling_process_id;
-
+	unsigned int 		pid;
+	unsigned int		last_rx_pid;
 	CRYPTO_T		*tp;
 	qhead			*queue;
 };
@@ -551,6 +554,7 @@ struct gemini_cipher_ctx {
 	CRYPTO_CIPHER_CBC_T       	cbc;
 	CRYPTO_CIPHER_ECB_T       	ecb;
 	struct crypto_skcipher		*fallback;
+	struct CRYPTO_PACKET_S		op;
 };
 
 enum alg_type {
@@ -570,7 +574,7 @@ struct gemini_crypto_tmp {
 void crypto_hw_cipher(struct gemini_crypto_info *secdev, unsigned char *ctrl_pkt,int ctrl_len,
 	struct scatterlist *data_pkt, int data_len, unsigned int tqflag,
 	unsigned char *out_pkt,int *out_len );
-int crypto_hw_process(struct CRYPTO_PACKET_S  *op_info);
+int crypto_hw_process(struct gemini_crypto_info *secdev, struct CRYPTO_PACKET_S  *op_info);
 
 
 extern struct gemini_crypto_tmp gemini_ecb_aes_alg;
