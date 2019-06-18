@@ -431,7 +431,7 @@ void crypto_hw_cipher(struct gemini_crypto_info *secdev, unsigned char *ctrl_pkt
 //	sg[0].length = ctrl_len;
 	spin_lock_irqsave(&secdev->tx_lock,flags);
 	gemini_crypto_tx_packet(secdev, sg, ctrl_len,tqflag);
-	gemini_crypto_tx_packet(secdev, data_pkt,data_len,0);
+	gemini_crypto_tx_packet(secdev, data_pkt, data_len,0);
 	gemini_crypto_start_dma(secdev);
 	spin_unlock_irqrestore(&secdev->tx_lock,flags);
 
