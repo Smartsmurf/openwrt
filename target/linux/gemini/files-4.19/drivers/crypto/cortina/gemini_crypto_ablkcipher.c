@@ -14,7 +14,7 @@
 #include <crypto/internal/skcipher.h>
 #include "gemini_crypto.h"
 
-#define RK_CRYPTO_DEC			BIT(0)
+// #define RK_CRYPTO_DEC			BIT(0)
 
 //static void gemini_crypto_complete(struct crypto_async_request *base, int err)
 //{
@@ -37,8 +37,12 @@ static int gemini_aes_setkey(struct crypto_ablkcipher *cipher,
 	struct gemini_cipher_ctx *ctx = crypto_ablkcipher_ctx(cipher);
 	struct CRYPTO_CIPHER_ECB_S *ecb = &ctx->ecb;
 
-	if (keylen != AES_KEYSIZE_128 && keylen != AES_KEYSIZE_192 &&
-	    keylen != AES_KEYSIZE_256) {
+	switch( keylen )
+	case AES_KEYSIZE_128:
+	case AES_KEYSIZE_192:
+	case AES_KEYSIZE_256:
+		break;
+	default:
 		crypto_ablkcipher_set_flags(cipher, CRYPTO_TFM_RES_BAD_KEY_LEN);
 		return -EINVAL;
 	}
@@ -388,7 +392,7 @@ struct gemini_crypto_tmp gemini_ecb_aes_alg = {
 	.type = ALG_TYPE_CIPHER,
 	.alg.crypto = {
 		.cra_name		= "ecb(aes)",
-		.cra_driver_name	= "ecb-aes-rk",
+		.cra_driver_name	= "ecb-aes-gemini",
 		.cra_priority		= 300,
 		.cra_flags		= CRYPTO_ALG_TYPE_ABLKCIPHER |
 					  CRYPTO_ALG_ASYNC,
@@ -414,7 +418,7 @@ struct gemini_crypto_tmp gemini_cbc_aes_alg = {
 	.type = ALG_TYPE_CIPHER,
 	.alg.crypto = {
 		.cra_name		= "cbc(aes)",
-		.cra_driver_name	= "cbc-aes-rk",
+		.cra_driver_name	= "cbc-aes-gemini",
 		.cra_priority		= 300,
 		.cra_flags		= CRYPTO_ALG_TYPE_ABLKCIPHER |
 					  CRYPTO_ALG_ASYNC,
@@ -429,7 +433,7 @@ struct gemini_crypto_tmp gemini_cbc_aes_alg = {
 			.min_keysize	= AES_MIN_KEY_SIZE,
 			.max_keysize	= AES_MAX_KEY_SIZE,
 			.ivsize		= AES_BLOCK_SIZE,
-//			.setkey		= gemini_aes_setkey,
+			.setkey		= gemini_aes_setkey,
 //			.encrypt	= gemini_aes_cbc_encrypt,
 //			.decrypt	= gemini_aes_cbc_decrypt,
 		}
