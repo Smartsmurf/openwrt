@@ -12,6 +12,13 @@
 #include <crypto/md5.h>
 #include <crypto/sha.h>
 
+#define MAX_POLLING_LOOPS 	40000
+#define RX_POLL_NUM 		10
+#define CRYPTO_RX_DESC_NUM 	64
+#define CRYPTO_TX_DESC_NUM 	128
+#define RX_BUF_SIZE 		8192
+#define TX_BUF_SIZE 		2048
+
 /* Cortina crypto registers */
 #define CRYPTO_ID            0x0000
 #define CRYPTO_CTRL          0x0004
@@ -27,17 +34,18 @@
 /*          the offset of DMA register          */
 /************************************************/
 enum CRYPTO_DMA_REGISTER {
-	CRYPTO_DMA_DEVICE_ID	= 0xff00,
-	CRYPTO_DMA_STATUS	= 0xff04,
-	CRYPTO_TXDMA_CTRL 	= 0xff08,
-	CRYPTO_TXDMA_FIRST_DESC 	= 0xff0c,
-	CRYPTO_TXDMA_CURR_DESC	= 0xff10,
-	CRYPTO_RXDMA_CTRL	= 0xff14,
-	CRYPTO_RXDMA_FIRST_DESC	= 0xff18,
-	CRYPTO_RXDMA_CURR_DESC	= 0xff1c,
+	CRYPTO_DMA_DEVICE_ID     = 0xff00,
+	CRYPTO_DMA_STATUS        = 0xff04,
+	CRYPTO_TXDMA_CTRL        = 0xff08,
+	CRYPTO_TXDMA_FIRST_DESC  = 0xff0c,
+	CRYPTO_TXDMA_CURR_DESC   = 0xff10,
+	CRYPTO_RXDMA_CTRL        = 0xff14,
+	CRYPTO_RXDMA_FIRST_DESC  = 0xff18,
+	CRYPTO_RXDMA_CURR_DESC   = 0xff1c,
 	CRYPTO_TXDMA_BUF_ADDR    = 0xff28,
+	CRYPTO_RXDMA_BUF_SIZE    = 0xff30,
 	CRYPTO_RXDMA_BUF_ADDR    = 0xff38,
-	CRYPTO_RXDMA_BUF_SIZE	= 0xff30,
+	CRYPTO_RXDMA_MAGIC       = 0xff40,
 };
 
 /* define owner bit */
@@ -366,18 +374,22 @@ typedef struct descriptor_t
 
 typedef struct CRYPTO_S
 {
-    unsigned char       *tx_bufs;
-    unsigned char       *rx_bufs;
-	CRYPTO_DESCRIPTOR_T	*tx_desc;	    /* point to virtual TX descriptor address*/
-	CRYPTO_DESCRIPTOR_T	*rx_desc;	    /* point to virtual RX descriptor address*/
-	CRYPTO_DESCRIPTOR_T	*tx_cur_desc;	/* point to current TX descriptor */
-	CRYPTO_DESCRIPTOR_T	*rx_cur_desc;	/* point to current RX descriptor */
-	CRYPTO_DESCRIPTOR_T  *tx_finished_desc;
-	CRYPTO_DESCRIPTOR_T  *rx_finished_desc;
-	dma_addr_t          rx_desc_dma;	/* physical RX descriptor address */
-	dma_addr_t          tx_desc_dma;    /* physical TX descriptor address */
-	dma_addr_t          rx_bufs_dma;    /* physical RX descriptor address */
-	dma_addr_t          tx_bufs_dma;    /* physical TX descriptor address */
+	CRYPTO_DESCRIPTOR_T	*tx_desc;	/* pointer to virtual TX descriptor address*/
+	CRYPTO_DESCRIPTOR_T	*rx_desc;	/* pointer to virtual RX descriptor address*/
+	CRYPTO_DESCRIPTOR_T	*tx_cur_desc;	/* pointer to current TX descriptor */
+	CRYPTO_DESCRIPTOR_T	*rx_cur_desc;	/* pointer to current RX descriptor */
+	CRYPTO_DESCRIPTOR_T	*tx_finished_desc;
+	CRYPTO_DESCRIPTOR_T	*rx_finished_desc;
+	dma_addr_t		rx_desc_dma;	/* physical RX descriptor address */
+	dma_addr_t		tx_desc_dma;    /* physical TX descriptor address */
+//    unsigned char       *tx_bufs;
+//    unsigned char       *rx_bufs;
+//	dma_addr_t          rx_bufs_dma;    /* physical RX descriptor address */
+//	dma_addr_t          tx_bufs_dma;    /* physical TX descriptor address */
+	unsigned int		tx_desc_virtual_base;
+	unsigned int		rx_desc_virtual_base;
+	unsigned int		rx_index;
+	CRYPTO_DESCRIPTOR_T     *rx_desc_index[CRYPTO_RX_DESC_NUM];
 } CRYPTO_T;
 
 /*=====================================================================================================*/
@@ -503,6 +515,7 @@ struct gemini_crypto_info {
 	struct device		*dev;
 	struct clk		*pclk;
 	int			irq;
+	struct reset_control 	*reset;
 
 //	struct aes_txdesc	*tx;
 //	struct aes_rxdesc	*rx;
@@ -510,8 +523,8 @@ struct gemini_crypto_info {
 //	dma_addr_t		phy_rx;
 //	dma_addr_t		phy_rec;
 //	struct list_head	aes_list;
-	unsigned int     	tx_desc_virtual_base;
-	unsigned int     	rx_desc_virtual_base;
+//	unsigned int     	tx_desc_virtual_base;
+//	unsigned int     	rx_desc_virtual_base;
 
 
 	struct tasklet_struct	done_tasklet;
@@ -519,7 +532,7 @@ struct gemini_crypto_info {
 //	unsigned int		rec_rear_idx;
 //	struct mtk_dma_rec	*rec;
 //	unsigned int		count;
-	spinlock_t		lock;
+//	spinlock_t		lock;
 	spinlock_t		irq_lock;
 	spinlock_t		tx_lock;
 	spinlock_t		queue_lock;

@@ -37,7 +37,7 @@ static int gemini_aes_setkey(struct crypto_ablkcipher *cipher,
 	struct gemini_cipher_ctx *ctx = crypto_ablkcipher_ctx(cipher);
 	struct CRYPTO_CIPHER_ECB_S *ecb = &ctx->ecb;
 
-	switch( keylen )
+	switch( keylen ){
 	case AES_KEYSIZE_128:
 	case AES_KEYSIZE_192:
 	case AES_KEYSIZE_256:
@@ -47,7 +47,7 @@ static int gemini_aes_setkey(struct crypto_ablkcipher *cipher,
 		return -EINVAL;
 	}
         ecb->control.bits.aesnk = keylen/4; /* AES key size */ 
-	return 0;
+	return (0);
 }
 
 static int gemini_aes_ecb_encrypt(struct ablkcipher_request *req)
@@ -61,7 +61,7 @@ static int gemini_aes_ecb_encrypt(struct ablkcipher_request *req)
 	ecb->control.bits.cipher_algorithm = ECB_AES;
 	ecb->control.bits.process_id = 0;
 
-	ret = crypto_hw_process(ctx->secdev, ctx->op);
+	ret = crypto_hw_process(ctx->secdev, &ctx->op);
 
 	return ret;
 }
