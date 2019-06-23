@@ -588,6 +588,7 @@ void crypto_hw_cipher(struct gemini_crypto_info *secdev, unsigned char *ctrl_pkt
 	struct scatterlist *data_pkt, int data_len, unsigned int tqflag,
 	unsigned char *out_pkt,int *out_len );
 int crypto_hw_process(struct gemini_crypto_info *secdev, struct CRYPTO_PACKET_S  *op_info);
+static void gemini_key_swap(unsigned char *out_key, unsigned char *in_key, unsigned int in_len);
 
 
 extern struct gemini_crypto_tmp gemini_ecb_aes_alg;

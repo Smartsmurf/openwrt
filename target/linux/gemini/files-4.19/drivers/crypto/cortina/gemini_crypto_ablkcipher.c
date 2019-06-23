@@ -46,7 +46,12 @@ static int gemini_aes_setkey(struct crypto_ablkcipher *cipher,
 		crypto_ablkcipher_set_flags(cipher, CRYPTO_TFM_RES_BAD_KEY_LEN);
 		return -EINVAL;
 	}
-        ecb->control.bits.aesnk = keylen/4; /* AES key size */ 
+		/* crypto is MSB */
+		gemini_key_swap( ecb->cipher_key, key, keylen );
+ 
+		/* keysize is in bytes -> crypto word size is 32 bits */
+		keylen = keylen >> 2;
+        ecb->control.bits.aesnk = keylen; /* AES key size */ 
 	return (0);
 }
 

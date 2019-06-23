@@ -9,7 +9,6 @@
  * under the terms and conditions of the GNU General Public License,
  * version 2, as published by the Free Software Foundation.
  *
- * Some ideas are from Rockwell driver.
  */
 
 #include <linux/module.h>
@@ -155,11 +154,11 @@ static int gemini_crypto_rx_packet(struct gemini_crypto_info *secdev, unsigned i
 	    	        dev_err(secdev->dev,"%s : descriptor processing error\n",__func__);
 	    	    }
 	    	    pkt_len = rx_desc->flag_status.bits_rx_status.frame_count;  /* total byte count in a frame*/
-		    process_id = rx_desc->flag_status.bits_rx_status.process_id; /* get process ID from descriptor */
-		    auth_cmp_result = rx_desc->flag_status.bits_rx_status.auth_result;
-		    // wep_crc_ok = rx_desc->flag_status.bits_rx_status.wep_crc_ok;
-		    // tkip_mic_ok = rx_desc->flag_status.bits_rx_status.tkip_mic_ok;
-		    // ccmp_mic_ok = rx_desc->flag_status.bits_rx_status.ccmp_mic_ok;
+		    	process_id = rx_desc->flag_status.bits_rx_status.process_id; /* get process ID from descriptor */
+				auth_cmp_result = rx_desc->flag_status.bits_rx_status.auth_result;
+				// wep_crc_ok = rx_desc->flag_status.bits_rx_status.wep_crc_ok;
+				// tkip_mic_ok = rx_desc->flag_status.bits_rx_status.tkip_mic_ok;
+				// ccmp_mic_ok = rx_desc->flag_status.bits_rx_status.ccmp_mic_ok;
 	    	    desc_count = rx_desc->frame_ctrl.bits.desc_count; /* get descriptor count per frame */ 
 	    	} else {
 	    	    return count;
@@ -389,11 +388,17 @@ static int gemini_interrupt_polling(struct gemini_crypto_info *secdev)
 	return 1;
 }
 
-static void gemini_key_swap(unsigned int *in_key,unsigned int in_len,unsigned int *out_key)
+static void gemini_key_swap(unsigned char *out_key, unsigned char *in_key, unsigned int in_len)
 {
 	int i;
-	for( i = 0; i < in_len; i++ )
-		*out_key++ = cpu_to_be32(*in_key++);
+	for( i = 0; i < in_len; i += 4 ){
+//		*out_key++ = cpu_to_be32(*in_key++);	/* exception on misaligment of in_key/out_key
+		out_key[3] = *in_key++;
+		out_key[2] = *in_key++;
+		out_key[1] = *in_key++;
+		out_key[0] = *in_key++;
+		out_key += 4;
+	}
 }
 
 static int crypto_buf_init(struct gemini_crypto_info *secdev)
