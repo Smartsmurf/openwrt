@@ -388,7 +388,7 @@ static int gemini_interrupt_polling(struct gemini_crypto_info *secdev)
 	return 1;
 }
 
-static void gemini_key_swap(unsigned char *out_key, unsigned char *in_key, unsigned int in_len)
+void gemini_key_swap(unsigned char *out_key, const unsigned char *in_key, unsigned int in_len)
 {
 	int i;
 	for( i = 0; i < in_len; i += 4 ){
@@ -597,7 +597,7 @@ static void gemini_crypto_start_dma(struct gemini_crypto_info *secdev)
 
 void crypto_hw_cipher(struct gemini_crypto_info *secdev, unsigned char *ctrl_pkt,int ctrl_len,
 	struct scatterlist *data_pkt, int data_len, unsigned int tqflag,
-	unsigned char *out_pkt,int *out_len )
+	struct scatterlist *out_pkt, int out_len )
 {
 	struct	scatterlist sg[1];
 	unsigned long		flags;
@@ -709,7 +709,7 @@ static int gemini_crypto_register(struct gemini_crypto_info *crypto_info)
 	int err = 0;
 
 	for (i = 0; i < ARRAY_SIZE(gemini_cipher_algs); i++) {
-		gemini_cipher_algs[i]->dev = crypto_info;
+		gemini_cipher_algs[i]->secdev = crypto_info;
 		if (gemini_cipher_algs[i]->type == ALG_TYPE_CIPHER)
 			err = crypto_register_alg(
 					&gemini_cipher_algs[i]->alg.crypto);
@@ -757,12 +757,14 @@ static void gemini_crypto_unregister(void)
 	}
 }
 
+/*
 static void gemini_crypto_action(void *data)
 {
 //	struct gemini_crypto_info *crypto_info = data;
 
 //	reset_control_assert(crypto_info->rst);
 }
+*/
 
 static int gemini_crypto_probe(struct platform_device *pdev)
 {

@@ -562,12 +562,12 @@ struct gemini_ahash_rctx {
 /* the private variable of cipher */
 struct gemini_cipher_ctx {
 	struct gemini_crypto_info	*secdev;
-	unsigned int			keylen;
-	u32				mode;
+//	unsigned int			keylen;
+//	u32				mode;
 	CRYPTO_CIPHER_CBC_T       	cbc;
 	CRYPTO_CIPHER_ECB_T       	ecb;
-	struct crypto_skcipher		*fallback;
-	struct CRYPTO_PACKET_S		op;
+//	struct crypto_skcipher		*fallback;
+//	struct CRYPTO_PACKET_S		op;
 };
 
 enum alg_type {
@@ -576,7 +576,7 @@ enum alg_type {
 };
 
 struct gemini_crypto_tmp {
-	struct gemini_crypto_info		*dev;
+	struct gemini_crypto_info	*secdev;
 	union {
 		struct crypto_alg	crypto;
 		struct ahash_alg	hash;
@@ -586,9 +586,9 @@ struct gemini_crypto_tmp {
 
 void crypto_hw_cipher(struct gemini_crypto_info *secdev, unsigned char *ctrl_pkt,int ctrl_len,
 	struct scatterlist *data_pkt, int data_len, unsigned int tqflag,
-	unsigned char *out_pkt,int *out_len );
+	struct scatterlist *out_pkt, int *out_len );
 int crypto_hw_process(struct gemini_crypto_info *secdev, struct CRYPTO_PACKET_S  *op_info);
-static void gemini_key_swap(unsigned char *out_key, unsigned char *in_key, unsigned int in_len);
+void gemini_key_swap(unsigned char *out_key, const unsigned char *in_key, unsigned int in_len);
 
 
 extern struct gemini_crypto_tmp gemini_ecb_aes_alg;
