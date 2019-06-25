@@ -36,6 +36,7 @@ static int gemini_aes_setkey(struct crypto_ablkcipher *cipher,
 {
 	struct gemini_cipher_ctx *ctx = crypto_ablkcipher_ctx(cipher);
 	struct CRYPTO_CIPHER_ECB_S *ecb = &ctx->ecb;
+	struct CRYPTO_CIPHER_CBC_S *cbc = &ctx->cbc;
 
 	switch( keylen ){
 	case AES_KEYSIZE_128:
@@ -48,11 +49,13 @@ static int gemini_aes_setkey(struct crypto_ablkcipher *cipher,
 	}
 	/* crypto is MSB */
 	gemini_key_swap( ecb->cipher_key, key, keylen );
+	gemini_key_swap( cbc->cipher_key, key, keylen );
  
 	/* keysize is in bytes -> crypto word size is 32 bits */
 	keylen = keylen >> 2;
 
         ecb->control.bits.aesnk = keylen; /* AES key size */ 
+        cbc->control.bits.aesnk = keylen; /* AES key size */ 
 	return (0);
 }
 
@@ -61,18 +64,15 @@ static int gemini_aes_ecb_encrypt(struct ablkcipher_request *req)
 	struct crypto_ablkcipher *tfm = crypto_ablkcipher_reqtfm(req);
 	struct gemini_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
 	struct CRYPTO_CIPHER_ECB_S *ecb = &ctx->ecb;
-	int	ret;
+	int	ret = 0;
 
 	ecb->control.bits.op_mode = CIPHER_ENC;		/* cipher encryption */
 	ecb->control.bits.cipher_algorithm = ECB_AES;	/* AES ECB mode */ 
 	ecb->control.bits.process_id = 0;		/* set frame process id */
 	ecb->cipher.bits.cipher_header_len = 0;		/* the header length to be skipped by the cipher */
 	ecb->cipher.bits.cipher_algorithm_len = req->nbytes;
-//void crypto_hw_cipher(struct gemini_crypto_info *secdev, unsigned char *ctrl_pkt,int ctrl_len,
-//	struct scatterlist *data_pkt, int data_len, unsigned int tqflag,
-//	unsigned char *out_pkt,int *out_len )
 
-	ret = crypto_hw_cipher(ctx->secdev, &ecb, sizeof(CRYPTO_CIPHER_ECB_T), req->src, req->nbytes, 0x7B,
+	crypto_hw_cipher(ctx->secdev, (unsigned char *)&ecb, sizeof(CRYPTO_CIPHER_ECB_T), req->src, req->nbytes, 0x7B,
 		req->dst, req->nbytes);
 
 	return ret;
@@ -83,18 +83,58 @@ static int gemini_aes_ecb_decrypt(struct ablkcipher_request *req)
 	struct crypto_ablkcipher *tfm = crypto_ablkcipher_reqtfm(req);
 	struct gemini_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
 	struct CRYPTO_CIPHER_ECB_S *ecb = &ctx->ecb;
-	int ret;
+	int ret = 0;
 
 	ecb->control.bits.op_mode = CIPHER_DEC;
 	ecb->control.bits.cipher_algorithm = ECB_AES;
-	ecb->control.bits.process_id = 0;
+	ecb->control.bits.process_id = 0;		/* set frame process id */
+	ecb->cipher.bits.cipher_header_len = 0;		/* the header length to be skipped by the cipher */
+	ecb->cipher.bits.cipher_algorithm_len = req->nbytes;
 
-        /* hardware encryption */
-//	ret = crypto_hw_cipher(ctx->secdev, (unsigned char *)ecb,sizeof(CRYPTO_CIPHER_ECB_T),
-//              	p->in_packet,op->pkt_len,tdflag,
-//                ipsec_result.hw_cipher,&ipsec_result.hw_pkt_len);
+	crypto_hw_cipher(ctx->secdev, (unsigned char *)&ecb, sizeof(CRYPTO_CIPHER_ECB_T), req->src, req->nbytes, 0x7B,
+		req->dst, req->nbytes);
+
 	return ret;
-;
+}
+
+static int gemini_aes_cbc_encrypt(struct ablkcipher_request *req)
+{
+	struct crypto_ablkcipher *tfm = crypto_ablkcipher_reqtfm(req);
+	struct gemini_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
+	struct CRYPTO_CIPHER_CBC_S *cbc = &ctx->cbc;
+	int	ret = 0;
+
+	cbc->control.bits.op_mode = CIPHER_ENC;		/* cipher encryption */
+	cbc->control.bits.cipher_algorithm = CBC_AES;	/* AES ECB mode */ 
+	cbc->control.bits.process_id = 0;		/* set frame process id */
+	cbc->cipher.bits.cipher_header_len = 0;		/* the header length to be skipped by the cipher */
+	cbc->cipher.bits.cipher_algorithm_len = req->nbytes;
+	gemini_key_swap(cbc->cipher_iv, (void *)req->info, 16);
+
+	crypto_hw_cipher(ctx->secdev, (unsigned char *)&cbc, sizeof(CRYPTO_CIPHER_CBC_T), req->src, req->nbytes, 0x7B,
+		req->dst, req->nbytes);
+
+	return ret;
+}
+
+static int gemini_aes_cbc_decrypt(struct ablkcipher_request *req)
+{
+	struct crypto_ablkcipher *tfm = crypto_ablkcipher_reqtfm(req);
+	struct gemini_cipher_ctx *ctx = crypto_ablkcipher_ctx(tfm);
+	struct CRYPTO_CIPHER_CBC_S *cbc = &ctx->cbc;
+	int	ret = 0;
+
+	cbc->control.bits.op_mode = CIPHER_DEC;		/* cipher encryption */
+	cbc->control.bits.cipher_algorithm = CBC_AES;	/* AES ECB mode */ 
+	cbc->control.bits.process_id = 0;		/* set frame process id */
+	cbc->cipher.bits.cipher_header_len = 0;		/* the header length to be skipped by the cipher */
+	cbc->cipher.bits.cipher_algorithm_len = req->nbytes;
+	gemini_key_swap(cbc->cipher_iv, (void *)req->info, 16);
+
+	crypto_hw_cipher(ctx->secdev, (unsigned char *)&cbc, sizeof(CRYPTO_CIPHER_CBC_T), req->src, req->nbytes, 0x7B,
+		req->dst, req->nbytes);
+
+	return ret;
 }
 
 static int gemini_ablk_cra_init(struct crypto_tfm *tfm)
@@ -134,7 +174,7 @@ static void gemini_ablk_cra_exit(struct crypto_tfm *tfm)
 struct gemini_crypto_tmp gemini_ecb_aes_alg = {
 	.type = ALG_TYPE_CIPHER,
 	.alg.crypto = {
-		.cra_name		= "ecb(aes)",
+		.cra_name		= "ecb(aes)-gemini",
 		.cra_driver_name	= "ecb-aes-gemini",
 		.cra_priority		= 300,
 		.cra_flags		= CRYPTO_ALG_TYPE_ABLKCIPHER |
@@ -160,7 +200,7 @@ struct gemini_crypto_tmp gemini_ecb_aes_alg = {
 struct gemini_crypto_tmp gemini_cbc_aes_alg = {
 	.type = ALG_TYPE_CIPHER,
 	.alg.crypto = {
-		.cra_name		= "cbc(aes)",
+		.cra_name		= "cbc(aes)-gemini",
 		.cra_driver_name	= "cbc-aes-gemini",
 		.cra_priority		= 300,
 		.cra_flags		= CRYPTO_ALG_TYPE_ABLKCIPHER |
@@ -177,8 +217,8 @@ struct gemini_crypto_tmp gemini_cbc_aes_alg = {
 			.max_keysize	= AES_MAX_KEY_SIZE,
 			.ivsize		= AES_BLOCK_SIZE,
 			.setkey		= gemini_aes_setkey,
-//			.encrypt	= gemini_aes_cbc_encrypt,
-//			.decrypt	= gemini_aes_cbc_decrypt,
+			.encrypt	= gemini_aes_cbc_encrypt,
+			.decrypt	= gemini_aes_cbc_decrypt,
 		}
 	}
 };

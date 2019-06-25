@@ -586,7 +586,7 @@ struct gemini_crypto_tmp {
 
 void crypto_hw_cipher(struct gemini_crypto_info *secdev, unsigned char *ctrl_pkt,int ctrl_len,
 	struct scatterlist *data_pkt, int data_len, unsigned int tqflag,
-	struct scatterlist *out_pkt, int *out_len );
+	struct scatterlist *out_pkt, int out_len );
 int crypto_hw_process(struct gemini_crypto_info *secdev, struct CRYPTO_PACKET_S  *op_info);
 void gemini_key_swap(unsigned char *out_key, const unsigned char *in_key, unsigned int in_len);
 
