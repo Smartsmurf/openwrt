@@ -179,7 +179,10 @@ endef
 TARGET_DEVICES += itian_sq201
 
 define Device/raidsonic_ib-4220-b
-	$(Device/itian-raidsonic)
+#	$(Device/itian-raidsonic)
+	IMAGES := factory.tar.gz
+	IMAGE/factory.tar.gz := append-rootfs | pad-rootfs | pad-to 6144k | \
+		nas4220b-sq201-images $(1)
 	DEVICE_TITLE := Raidsonic NAS IB-4220-B
 	DEVICE_DTS := gemini-nas4220b
 	DEVICE_TYPE := nas
