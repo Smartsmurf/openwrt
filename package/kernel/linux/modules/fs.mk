@@ -246,8 +246,14 @@ $(eval $(call KernelPackage,fs-ext4))
 define KernelPackage/fs-f2fs
   SUBMENU:=$(FS_MENU)
   TITLE:=F2FS filesystem support
-  DEPENDS:= +kmod-crypto-hash +kmod-crypto-crc32 +kmod-nls-base
-  KCONFIG:=CONFIG_F2FS_FS
+  DEPENDS:= +kmod-crypto-hash +kmod-crypto-crc32 +kmod-nls-base +kmod-lib-lz4 +kmod-lib-lz4-decompress +kmod-lib-zstd +kmod-lib-lz4hc
+  KCONFIG:=CONFIG_F2FS_FS \
+  CONFIG_F2FS_FS_COMPRESSION=y \
+  CONFIG_F2FS_FS_LZO=y \
+  CONFIG_F2FS_FS_LZ4=y \
+  CONFIG_F2FS_FS_ZSTD=y \
+  CONFIG_F2FS_FS_LZORLE=y \
+  CONFIG_F2FS_FS_LZ4HC=y
   FILES:=$(LINUX_DIR)/fs/f2fs/f2fs.ko
   AUTOLOAD:=$(call AutoLoad,30,f2fs,1)
 endef

@@ -55,9 +55,8 @@ define Build/dns313-images
 		--root $@.tmp $@.tmp-boot
 
 	# The device firmware needs revision 1 of EXT2
-	$(STAGING_DIR_HOST)/bin/tune2fs -O filetype $@.tmp-boot
-	# Ignore errors because file system was intentionally broken with tune2fs
-	-$(STAGING_DIR_HOST)/bin/e2fsck -pDf $@.tmp-boot > /dev/null
+	tune2fs -O filetype $@.tmp-boot
+	e2fsck -pDf $@.tmp-boot > /dev/null
 
 	./dns313_gen_hdd_img.sh $@ $@.tmp-boot $(IMAGE_ROOTFS) \
 		$(CONFIG_TARGET_KERNEL_PARTSIZE) \
@@ -111,6 +110,27 @@ define Build/storlink-default-images
 	rm -rf $@.tmp
 endef
 
+define Build/raidsonic-default-images
+
+	# NAS4220: mach id 2038 (0x7F6)
+	echo -en "\x07\x1c\xa0\xe3\xf6\x10\x81\xe3" > $(KDIR)/nas4220-zImage
+	cat $(KDIR)/zImage >> $(KDIR)/nas4220-zImage
+	cat $(DTS_DIR)/gemini-nas4220b.dtb >> $(KDIR)/nas4220-zImage
+	cp $(KDIR)/zImage $(BIN_DIR)/openwrt-gemini-raidsonic-nas4220-zImage_nodtb
+	cp $(DTS_DIR)/gemini-nas4220b.dtb $(BIN_DIR)/gemini-nas4220b.dtb
+
+	dd if=$@ of=$(BIN_DIR)/rd.gz bs=6144k count=1
+	touch $(BIN_DIR)/hddapp.tgz
+	dd if=$@ of=$(BIN_DIR)/hddapp.tgz bs=6144k count=1 skip=1
+	cp $(KDIR)/nas4220-zImage $(BIN_DIR)/$(IMG_PREFIX)-nas4220-zImage
+	cp $(BIN_DIR)/$(IMG_PREFIX)-nas4220-zImage $(BIN_DIR)/zImage
+	cp ./ImageInfo-raidsonic_ib-4220-b $(BIN_DIR)/ImageInfo
+	(cd $(BIN_DIR); tar -czf $(IMG_PREFIX)-sysupgrade-ib4220.tar.gz ImageInfo zImage rd.gz hddapp.tgz)
+	mv $(BIN_DIR)/rd.gz $(BIN_DIR)/$(IMG_PREFIX)-nas4220-rd.gz
+	mv $(BIN_DIR)/hddapp.tgz $(BIN_DIR)/$(IMG_PREFIX)-nas4220-hddapp.tgz
+	rm -f $(BIN_DIR)/zImage $(BIN_DIR)/ImageInfo
+endef
+
 # WBD-111 and WBD-222:
 # work around the bootloader's bug with extra nops
 # FIXME: is this really needed now that we no longer append the code
@@ -125,7 +145,6 @@ endef
 # All DTB files are prefixed with "gemini-"
 define Device/Default
 	PROFILES := Default
-	DEVICE_DTS_DIR = $$(DTS_DIR)/gemini
 	KERNEL_DEPENDS = $$(wildcard $(DTS_DIR)/$$(DEVICE_DTS).dts)
 	KERNEL_NAME := zImage
 	KERNEL := kernel-bin | append-dtb
@@ -189,6 +208,15 @@ define Device/storlink-reference
 	DEVICE_PACKAGES := $(GEMINI_NAS_PACKAGES)
 endef
 
+define Device/raidsonic-reference
+#	COMPILE := copy-kernel-$(1).bin
+#	COMPILE/copy-kernel-$(1).bin := copy-kernel.bin
+	IMAGES := factory.bin
+	IMAGE/factory.bin := append-rootfs | pad-rootfs | pad-to 6144k | \
+		raidsonic-default-images $(1)
+	DEVICE_PACKAGES := $(GEMINI_NAS_PACKAGES)
+endef
+
 define Device/itian_sq201
 	$(Device/storlink-reference)
 	DEVICE_VENDOR := ITian
@@ -199,7 +227,7 @@ endef
 TARGET_DEVICES += itian_sq201
 
 define Device/raidsonic_ib-4220-b
-	$(Device/storlink-reference)
+	$(Device/raidsonic-reference)
 	DEVICE_VENDOR := Raidsonic
 	DEVICE_MODEL := NAS IB-4220-B
 	DEVICE_DTS := gemini-nas4220b

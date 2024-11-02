@@ -1,0 +1,43 @@
+--- a/arch/arm/boot/dts/gemini-nas4220b.dts
++++ b/arch/arm/boot/dts/gemini-nas4220b.dts
+@@ -111,8 +111,34 @@
+-			partitions {
+-				compatible = "redboot-fis";
+-				/* Eraseblock at 0xfe0000 */
+-				fis-index-block = <0x7f>;
+-			};
++			partition@0 {
++				label = "RedBoot";
++				reg = <0x00000000 0x00020000>;
++				read-only;
++			};
++			partition@20000 {
++				label = "Kern";
++				reg = <0x00020000 0x00300000>;
++			};
++			partition@320000 {
++				label = "Ramdisk";
++				reg = <0x00320000 0x00600000>;
++			};
++			partition@920000 {
++				label = "Application";
++				reg = <0x00920000 0x00600000>;
++			};
++			partition@f20000 {
++				label = "VCTL";
++				reg = <0x00f20000 0x00020000>;
++				read-only;
++			};
++			partition@f40000 {
++				label = "CurConf";
++				reg = <0x00f40000 0x000a0000>;
++				read-only;
++			};
++			partition@fe0000 {
++				label = "FIS directory";
++				reg = <0x00fe0000 0x00020000>;
++			};
+ 		};
+ 
+ 		syscon: syscon@40000000 {
+

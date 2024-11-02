@@ -128,3 +128,146 @@ define KernelPackage/sound-soc-sunxi-spdif/description
 endef
 
 $(eval $(call KernelPackage,sound-soc-sunxi-spdif))
+
+define KernelPackage/sun4i-drm
+    SUBMENU:=$(DISPLAY_MENU)
+    TITLE:=DRM Support for Allwinner A10 Display Engine
+    DEPENDS:=@TARGET_sunxi +kmod-backlight +kmod-drm +kmod-drm-kms-helper +kmod-lib-crc-ccitt
+    KCONFIG:= \
+	CONFIG_ARCH_SUNXI=y \
+        	CONFIG_CMA=y \
+        	CONFIG_DMA_CMA=y \
+	CONFIG_DRM_FBDEV_EMULATION=y \
+	CONFIG_DRM_FBDEV_OVERALLOC=100 \
+	CONFIG_DRM_SUN4I \
+	CONFIG_DRM_SUN4I_HDMI \
+	CONFIG_DRM_SUN4I_HDMI_CEC=n \
+	CONFIG_DRM_SUN4I_BACKEND \
+	CONFIG_DRM_SUN8I_DW_HDMI \
+	CONFIG_DRM_SUN6I_DSI \
+	CONFIG_DRM_SUN8I_MIXER \
+	CONFIG_DRM_PANEL_SIMPLE \
+	CONFIG_DRM_PANEL=y \
+	CONFIG_DRM_GEM_CMA_HELPER=y \
+	CONFIG_DRM_KMS_CMA_HELPER=y \
+	CONFIG_RESET_CONTROLLER=y \
+	CONFIG_DRM_PANEL_SAMSUNG_LD9040=n \
+	CONFIG_DRM_PANEL_SAMSUNG_S6E8AA0=n \
+	CONFIG_DRM_PANEL_LG_LG4573=n \
+	CONFIG_DRM_PANEL_LD9040=n \
+	CONFIG_DRM_PANEL_LVDS=n \
+	CONFIG_DRM_PANEL_S6E8AA0=n \
+	CONFIG_DRM_PANEL_SITRONIX_ST7789V=n
+
+    FILES:= \
+	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun4i-drm.ko \
+	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun4i-backend.ko \
+ 	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun4i-frontend.ko \
+	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun4i-tcon.ko \
+	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun4i_tv.ko \
+	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun6i_mipi_dsi.ko \
+	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun6i_drc.ko \
+	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun8i-mixer.ko \
+ 	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun8i_tcon_top.ko \
+ 	$(LINUX_DIR)/drivers/gpu/drm/panel/panel-simple.ko
+    AUTOLOAD:=$(call AutoLoad,08,sun4i-drm sun4i-backend sun4i-frontend sun4i-tcon sun4i_tv sun6i_mipi_dsi sun6i_drc sun8i-mixer sun8i_tcon_top panel-simple)
+endef
+
+define KernelPackage/sun4i-drm/description
+  DRM Support for Allwinner A10 Display Engine
+endef
+
+$(eval $(call KernelPackage,sun4i-drm))
+
+define KernelPackage/sunxi-musb
+  SUBMENU:=$(USB_MENU)
+  TITLE:=AllWinner family built-in SoC musb controller support
+  KCONFIG:= CONFIG_USB_MUSB_SUNXI
+  FILES:=$(LINUX_DIR)/drivers/usb/musb/sunxi.ko
+  AUTOLOAD:=$(call AutoLoad,53,sunxi)
+  DEPENDS:=@TARGET_sunxi +kmod-musb-core
+endef
+
+define KernelPackage/sunxi-musb/description
+  AllWinner family built-in SoC musb controller support 
+endef
+
+$(eval $(call KernelPackage,sunxi-musb))
+
+define KernelPackage/sun6i-csi
+  SUBMENU:=$(VIDEO_MENU)
+  TITLE:=Allwinner sun6i family Camera Sensor Interface driver
+  KCONFIG:= CONFIG_VIDEO_SUN6I_CSI
+  FILES:=$(LINUX_DIR)/drivers/media/platform/sunxi/sun6i-csi/sun6i-csi.ko
+  AUTOLOAD:=$(call AutoProbe,sun6i-csi)
+  DEPENDS:=@TARGET_sunxi_cortexa7 @LINUX_5_4 +kmod-video-csi-core +kmod-video-videobuf2 +kmod-video-videobuf2-dma-contig
+endef
+
+define KernelPackage/sun6i-csi/description
+  Allwinner sun6i family Camera Sensor Interface driver
+endef
+
+$(eval $(call KernelPackage,sun6i-csi))
+
+define KernelPackage/sun4i-csi
+  SUBMENU:=$(VIDEO_MENU)
+  TITLE:=Allwinner sun4i family Camera Sensor Interface driver
+  KCONFIG:= CONFIG_VIDEO_SUN4I_CSI
+  FILES:=$(LINUX_DIR)/drivers/media/platform/sunxi/sun4i-csi/sun4i-csi.ko
+  AUTOLOAD:=$(call AutoProbe,sun4i-csi)
+  DEPENDS:=@TARGET_sunxi @LINUX_5_4 +kmod-video-csi-core +kmod-video-videobuf2 +kmod-video-videobuf2-dma-contig
+endef
+
+define KernelPackage/sun4i-csi/description
+  Allwinner sun4i family Camera Sensor Interface driver
+endef
+
+$(eval $(call KernelPackage,sun4i-csi))
+
+# nonfree vpu driver
+define KernelPackage/sunxi-cedarx
+  SUBMENU:=Video Encoder/Decoder Support
+  TITLE:=Allwinner VPU encoder/decoder module
+  DEPENDS:=@TARGET_sunxi @LINUX_5_4
+  KCONFIG:= CONFIG_GENERIC_ALLOCATOR=y \
+         CONFIG_STAGING_MEDIA=y \
+         CONFIG_CMA_DEBUG=n \
+         CONFIG_CMA_DEBUGFS=n \
+         CONFIG_VIDEO_SUNXI=y \
+         CONFIG_DMA_SHARED_BUFFER=y \
+         CONFIG_VIDEO_SUNXI_CEDAR_ION=y \
+         CONFIG_VIDEO_SUNXI_CEDAR_VE \
+         CONFIG_CMA=y \
+         CONFIG_DMA_CMA=y \
+         CONFIG_CMA_SIZE_MBYTES=16 \
+         CONFIG_CMA_SIZE_SEL_MBYTES=y \
+         CONFIG_CMA_ALIGNMENT=8 \
+         CONFIG_CMA_AREAS=7
+  FILES:= $(LINUX_DIR)/drivers/staging/media/sunxi/cedar/ve/cedar_ve.ko
+  AUTOLOAD:=$(call AutoProbe,cedar_ve)
+endef
+$(eval $(call KernelPackage,sunxi-cedarx))
+
+# open-source vpu driver
+define KernelPackage/sunxi-cedrus
+  SUBMENU:=Video Encoder/Decoder Support
+  TITLE:=Allwinner Open-Source VPU Encoder/Decoder module
+  DEPENDS:=@TARGET_sunxi @LINUX_5_4 +kmod-video-core +kmod-video-videobuf2 +kmod-video-videobuf2-dma-contig
+  KCONFIG:= CONFIG_GENERIC_ALLOCATOR=y \
+         CONFIG_STAGING_MEDIA=y \
+         CONFIG_CMA_DEBUG=n \
+         CONFIG_CMA_DEBUGFS=n \
+         CONFIG_VIDEO_SUNXI=y \
+         CONFIG_DMA_SHARED_BUFFER=y \
+         CONFIG_VIDEO_SUNXI_CEDRUS=y \
+         CONFIG_V4L_MEM2MEM_DRIVERS=y \
+         CONFIG_VIDEO_MEM2MEM_DEINTERLACE=n \
+         CONFIG_VIDEO_SH_VEU=n \
+         CONFIG_CMA=y \
+         CONFIG_DMA_CMA=y \
+         CONFIG_CMA_SIZE_MBYTES=16 \
+         CONFIG_CMA_SIZE_SEL_MBYTES=y \
+         CONFIG_CMA_ALIGNMENT=8 \
+         CONFIG_CMA_AREAS=7
+endef
+$(eval $(call KernelPackage,sunxi-cedrus))

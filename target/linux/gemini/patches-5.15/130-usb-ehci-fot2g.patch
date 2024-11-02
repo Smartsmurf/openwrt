@@ -1,0 +1,52 @@
+--- a/drivers/usb/host/fotg210.h	2021-04-10 13:34:32.000000000 +0200
++++ b/drivers/usb/host/fotg210.h	2021-04-16 22:34:55.796230000 +0200
+@@ -283,7 +283,10 @@
+ #define PORT_CSC	(1<<1)		/* connect status change */
+ #define PORT_CONNECT	(1<<0)		/* device connected */
+ #define PORT_RWC_BITS   (PORT_CSC | PORT_PEC)
+-	u32     reserved2[19];
++	
++	u32	rsvd1[7];		/* 0x24: reserved */
++	u32	miscr;			/* 0x40: Miscellaneous Register */
++	u32     reserved2[11];		/* 0x44: reserved */
+ 
+ 	/* OTGCSR: offet 0x70 */
+ 	u32     otgcsr;
+--- a/drivers/usb/host/fotg210-hcd.c	2021-04-18 20:50:33.005214000 +0200
++++ b/drivers/usb/host/fotg210-hcd.c	2021-04-18 20:44:48.971188847 +0200
+@@ -5553,13 +5553,35 @@
+ {
+ 	u32 value;
+ 
++	fotg210_info(fotg210, "resetting fotg2xx\n");
++
+ 	iowrite32(GMIR_MDEV_INT | GMIR_MOTG_INT | GMIR_INT_POLARITY,
+ 			&fotg210->regs->gmir);
+ 
++	/* ... Power off A-device */
++	value = ioread32(&fotg210->regs->otgcsr);
++	value |= OTGCSR_A_BUS_DROP;
++	iowrite32(value, &fotg210->regs->otgcsr);
++	/* ... Drop vbus and bus traffic */
++	value = ioread32(&fotg210->regs->otgcsr);
++	value &= ~OTGCSR_A_BUS_REQ;
++	iowrite32(value, &fotg210->regs->otgcsr);
++	msleep(10);
++	/* ... Power on A-device */
+ 	value = ioread32(&fotg210->regs->otgcsr);
+ 	value &= ~OTGCSR_A_BUS_DROP;
++	iowrite32(value, &fotg210->regs->otgcsr);
++	/* ... Drive vbus and bus traffic */
++	value = ioread32(&fotg210->regs->otgcsr);
+ 	value |= OTGCSR_A_BUS_REQ;
+ 	iowrite32(value, &fotg210->regs->otgcsr);
++	msleep(10);
++
++	/* setup MISC register, fixes timing problems */
++	value = ioread32(&fotg210->regs->miscr);
++	value |= 0xD;
++	iowrite32(value, &fotg210->regs->miscr);
++
+ }
+ 
+ /*

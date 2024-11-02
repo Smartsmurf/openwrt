@@ -1,4 +1,4 @@
-src-git packages https://git.openwrt.org/feed/packages.git
+#src-git packages https://git.openwrt.org/feed/packages.git
 src-git luci https://git.openwrt.org/project/luci.git
 src-git routing https://git.openwrt.org/feed/routing.git
 src-git telephony https://git.openwrt.org/feed/telephony.git
@@ -6,3 +6,8 @@ src-git telephony https://git.openwrt.org/feed/telephony.git
 #src-git targets https://github.com/openwrt/targets.git
 #src-git oldpackages http://git.openwrt.org/packages.git
 #src-link custom /usr/src/openwrt/custom-feed
+src-git smartpackages https://github.com/Smartsmurf/smartpackages.git
+src-git packages https://github.com/Smartsmurf/openwrt-packages.git
+src-git handsomefeed https://github.com/HandsomeMod/handsomefeed.git
+src-git extra https://github.com/HandsomeMod/extra.git
+src-git xorg https://github.com/HandsomeMod/xorg.git

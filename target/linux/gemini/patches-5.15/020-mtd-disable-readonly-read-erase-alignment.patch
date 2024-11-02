@@ -1,0 +1,12 @@
+--- a/drivers/mtd/mtdpart.c
++++ b/drivers/mtd/mtdpart.c
+@@ -204,8 +204,7 @@
+ 		}
+ 
+ 		if (remainder) {
+-			child->flags &= ~MTD_WRITEABLE;
+-			printk(KERN_WARNING"mtd: partition \"%s\" doesn't end on an erase/write block -- force read-only\n",
++			printk(KERN_WARNING"mtd: partition \"%s\" doesn't end on an erase/write block\n",
+ 				part->name);
+ 		}
+ 	}

@@ -576,7 +576,7 @@ define KernelPackage/usb-audio
 	CONFIG_SND_USB_AUDIO
   $(call AddDepends/usb)
   $(call AddDepends/sound)
-  FILES:= \
+  FILES:= $(LINUX_DIR)/drivers/media/mc/mc.ko \
 	$(LINUX_DIR)/sound/usb/snd-usbmidi-lib.ko \
 	$(LINUX_DIR)/sound/usb/snd-usb-audio.ko
   AUTOLOAD:=$(call AutoProbe,snd-usbmidi-lib snd-usb-audio)
@@ -1911,3 +1911,64 @@ endef
 
 $(eval $(call KernelPackage,chaoskey))
 
+define KernelPackage/usb-gadget-functionfs
+  TITLE:=USB Function filesystem support
+  KCONFIG:= \
+	CONFIG_USB_CONFIGFS_F_FS=y \
+	CONFIG_USB_FUNCTIONFS \
+	CONFIG_USB_FUNCTIONFS_ETH=n \
+	CONFIG_USB_FUNCTIONFS_RNDIS=y \
+	CONFIG_USB_FUNCTIONFS_GENERIC=n 
+  DEPENDS:=+kmod-usb-gadget +kmod-usb-lib-composite +kmod-usb-gadget-eth
+  FILES:= \
+	$(LINUX_DIR)/drivers/usb/gadget/legacy/g_ffs.ko \
+	$(LINUX_DIR)/drivers/usb/gadget/function/usb_f_fs.ko
+  AUTOLOAD:=$(call AutoLoad,53,usb_f_fs)
+  $(call AddDepends/usb)
+endef
+
+define KernelPackage/usb-gadget-functionfs/description
+  Kernel support for USB Function filesystem 
+endef
+
+$(eval $(call KernelPackage,usb-gadget-functionfs))
+
+define KernelPackage/usb-gadget-multi
+  TITLE:=Multifunction Composite Gadget support
+  KCONFIG:= \
+	CONFIG_USB_G_MULTI_RNDIS=y \
+	CONFIG_USB_G_MULTI_CDC=y \
+	CONFIG_USB_G_MULTI
+  DEPENDS:=+kmod-usb-gadget +kmod-usb-lib-composite +kmod-usb-gadget-mass-storage +kmod-usb-gadget-eth
+  FILES:= $(LINUX_DIR)/drivers/usb/gadget/legacy/g_multi.ko
+  AUTOLOAD:=$(call AutoLoad,54,g_multi)
+  $(call AddDepends/usb)
+endef
+
+define KernelPackage/usb-gadget-multi/description
+  Kernel support for RNDIS + CDC Serial + Storage multi-function gadget.
+endef
+
+$(eval $(call KernelPackage,usb-gadget-multi))
+
+define KernelPackage/musb-core
+  TITLE:=Basic MUSB Controller Support 
+  KCONFIG:= \
+	CONFIG_NOP_USB_XCEIV=y \
+	CONFIG_USB_MUSB_HDRC \
+  CONFIG_USB_MUSB_HOST=n \
+  CONFIG_USB_MUSB_GADGET=n \
+	CONFIG_USB_MUSB_DUAL_ROLE=y \
+	CONFIG_MUSB_PIO_ONLY=y
+  DEPENDS:=+kmod-usb-gadget
+  FILES:= \
+	$(LINUX_DIR)/drivers/usb/musb/musb_hdrc.ko 
+  AUTOLOAD:=$(call AutoLoad,52,musb_hdrc)
+  $(call AddDepends/usb)
+endef
+
+define KernelPackage/musb-core/description
+  Basic Musb Controller Support
+endef
+
+$(eval $(call KernelPackage,musb-core))
