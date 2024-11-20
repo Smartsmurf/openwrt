@@ -11,7 +11,7 @@ include $(TOPDIR)/rules.mk
 ARCH:=aarch64
 BOARD:=msm89xx
 BOARDNAME:=Qualcomm Msm89xx Soc
-FEATURES:=fpu usb display rtc usbgadget gpio squashfs
+FEATURES:=fpu usb display rtc usbgadget gpio squashfs dt virtio
 SUBTARGETS:=msm8916
 MAINTAINER:=SmartSmurf <smartsmurf@shared-files.de>
 
@@ -25,7 +25,8 @@ endef
 
 include $(INCLUDE_DIR)/target.mk
 
-DEFAULT_PACKAGES += partx-utils mkf2fs e2fsprogs
-DEFAULT_PACKAGES += kmod-wcn36xx kmod-qcom-remoteproc kmod-qcom-wcnss kmod-qcom-bluetooth
+DEFAULT_PACKAGES += partx-utils mkf2fs e2fsprogs kmod-wcn36xx
+DEFAULT_PACKAGES += kmod-qcom-rproc kmod-qcom-rproc-wcnss kmod-qcom-bluetooth
+DEFAULT_PACKAGES += kmod-usb-chipidea kmod-usb-gadget-eth
 
 $(eval $(call BuildTarget))
