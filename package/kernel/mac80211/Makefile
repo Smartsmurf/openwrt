@@ -28,7 +28,7 @@ PKG_DRIVERS = \
 	mac80211-hwsim \
 	mt7601u \
 	rsi91x rsi91x-usb rsi91x-sdio\
-	wlcore wl12xx wl18xx
+	wlcore wl12xx wl18xx wcn36xx
 
 PKG_CONFIG_DEPENDS:= \
 	CONFIG_PACKAGE_kmod-mac80211 \
@@ -249,10 +249,25 @@ define KernelPackage/wl18xx/description
  Kernel modules for TI WL18xx
 endef
 
+define KernelPackage/wcn36xx
+  $(call KernelPackage/mac80211/Default)
+  TITLE:=Qualcomm Atheros WCN3660/3680 support
+  URL:=https://wireless.wiki.kernel.org/en/users/drivers/wcn36xx
+  DEPENDS+= @TARGET_msm89xx +kmod-ath +kmod-qcom-rproc-wcnss
+  FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/ath/wcn36xx/wcn36xx.ko
+  AUTOLOAD:=$(call AutoProbe,wcn36xx)
+endef
+
+define KernelPackage/wcn36xx/description
+This module adds support for Qualcomm Atheros WCN3660/3680 Wireless
+blocks in some Qualcomm SoCs
+endef
+
 
 ifdef CONFIG_PACKAGE_MAC80211_DEBUGFS
   config-y += \
 	CFG80211_DEBUGFS \
+	WCN36XX_DEBUGFS \
 	MAC80211_DEBUGFS
 endif
 
@@ -272,6 +287,7 @@ config-y += WL_TI WILINK_PLATFORM_DATA
 config-$(call config_package,rsi91x) += RSI_91X
 config-$(call config_package,rsi91x-usb) += RSI_USB
 config-$(call config_package,rsi91x-sdio) += RSI_SDIO
+config-$(CONFIG_TARGET_msm89xx) += WCN36XX
 
 config-$(CONFIG_LEDS_TRIGGERS) += MAC80211_LEDS
 
