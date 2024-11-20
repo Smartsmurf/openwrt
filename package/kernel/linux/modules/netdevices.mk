@@ -1425,13 +1425,13 @@ endef
 
 $(eval $(call KernelPackage,fixed-phy))
 
+# $(LINUX_DIR)/drivers/net/phy/fixed_phy.ko
 define KernelPackage/of-mdio
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=OpenFirmware MDIO support
-  DEPENDS:=+kmod-libphy +kmod-fixed-phy @!TARGET_x86
+  DEPENDS:=+kmod-fixed-phy +kmod-libphy +kmod-fixed-phy @!TARGET_x86
   KCONFIG:=CONFIG_OF_MDIO
-  FILES:= $(LINUX_DIR)/drivers/net/phy/fixed_phy.ko \
-	$(LINUX_DIR)/drivers/net/mdio/of_mdio.ko \
+  FILES:= $(LINUX_DIR)/drivers/net/mdio/of_mdio.ko \
 	$(LINUX_DIR)/drivers/net/mdio/fwnode_mdio.ko
   AUTOLOAD:=$(call AutoLoad,41,of_mdio)
 endef

@@ -1,19 +1,17 @@
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# Copyright (C) 2020-2022 HandsomeMod Project
 # Copyright (C) 2024 SmartSmurf
 
 define KernelPackage/qcom-bluetooth
     SUBMENU:=$(OTHER_MENU)
     TITLE:=Qualcomm SoC built-in bluetooth support
-    DEPENDS:=@TARGET_msm89xx +kmod-bluetooth +kmod-qcom-wcnss
+    DEPENDS:=@TARGET_msm89xx +kmod-bluetooth +kmod-qcom-rproc-wcnss
     KCONFIG:= \
          CONFIG_BT_QCOMSMD \
          CONFIG_BT_HCIUART_QCA=y \
          CONFIG_INPUT_PM8941_PWRKEY=n \
          CONFIG_INPUT_PM8XXX_VIBRATOR=n
-    FILES:= $(LINUX_DIR)/drivers/bluetooth/btqcomsmd.ko \
-    $(LINUX_DIR)/drivers/bluetooth/btqca.ko
+    FILES:= $(LINUX_DIR)/drivers/bluetooth/btqcomsmd.ko
     AUTOLOAD:=$(call AutoLoad,50,btqcomsmd)
 endef
 
@@ -43,11 +41,10 @@ endef
 
 $(eval $(call KernelPackage,qcom-camss))
 
-# +kmod-video-gspca-core 
 define KernelPackage/qcom-venus
   SUBMENU:=Video Encoder/Decoder Support
   TITLE:=Qualcomm Venus V4L2 encoder/decoder driver
-  DEPENDS:=@TARGET_msm89xx +kmod-video-core +kmod-video-videobuf2 +kmod-video-videobuf2-dma-contig +kmod-qcom-remoteproc +venus-firmware
+  DEPENDS:=@TARGET_msm89xx +kmod-video-core +kmod-video-videobuf2 +kmod-video-gspca-core +kmod-qcom-rproc +venus-firmware +kmod-video-videobuf2-dma-contig 
   KCONFIG:= \
          CONFIG_V4L_MEM2MEM_DRIVERS=y \
          CONFIG_VIDEO_MEM2MEM_DEINTERLACE=y \
@@ -63,69 +60,44 @@ define KernelPackage/qcom-venus
 endef
 $(eval $(call KernelPackage,qcom-venus))
 
-define KernelPackage/qcom-wcnss
+define KernelPackage/rpmsg-wwan-ctrl
   SUBMENU:=$(NETWORK_DEVICES_MENU)
-  TITLE:=Qualcomm wireless connectivity subsystem support
-  DEPENDS:=@TARGET_msm89xx +kmod-qcom-remoteproc
-  KCONFIG:= \
-         CONFIG_QCOM_WCNSS_PIL \
-         CONFIG_QCOM_WCNSS_CTRL
-  FILES:= \
-         $(LINUX_DIR)/drivers/remoteproc/qcom_wcnss_pil.ko \
-         $(LINUX_DIR)/drivers/soc/qcom/wcnss_ctrl.ko
-  AUTOLOAD:=$(call AutoLoad,50,wcnss_ctrl qcom_wcnss_pil)
+  TITLE:=RPMSG WWAN Control
+  DEPENDS:=@TARGET_msm89xx +kmod-wwan
+  KCONFIG:=CONFIG_RPMSG_WWAN_CTRL
+  FILES:=$(LINUX_DIR)/drivers/net/wwan/rpmsg_wwan_ctrl.ko
+  AUTOLOAD:=$(call AutoProbe,rpmsg_wwan_ctrl)
 endef
 
-$(eval $(call KernelPackage,qcom-wcnss))
-
-define KernelPackage/qcom-remoteproc
-  SUBMENU:=$(OTHER_MENU)
-  TITLE:=Qualcomm remoteproc support
-  DEPENDS:=@TARGET_msm89xx +kmod-dma-buf
-  KCONFIG:= \
-         CONFIG_QCOM_PIL_INFO \
-         CONFIG_RPMSG_QCOM_GLINK \
-         CONFIG_RPMSG_QCOM_GLINK_SMEM \
-         CONFIG_QCOM_MEMSHARE_QMI_SERVICE \
-         CONFIG_QCOM_SYSMON \
-         CONFIG_QCOM_FASTRPC \
-         CONFIG_QCOM_QMI_HELPERS \
-         CONFIG_QCOM_PDR_HELPERS \
-         CONFIG_QCOM_RPROC_COMMON \
-         CONFIG_QCOM_MDT_LOADER \
-         CONFIG_QRTR \
-         CONFIG_QRTR_SMD \
-         CONFIG_QRTR_TUN
-  FILES:= \
-         $(LINUX_DIR)/drivers/soc/qcom/mdt_loader.ko \
-         $(LINUX_DIR)/drivers/soc/qcom/qmi_helpers.ko \
-         $(LINUX_DIR)/drivers/remoteproc/qcom_common.ko \
-         $(LINUX_DIR)/drivers/remoteproc/qcom_pil_info.ko \
-         $(LINUX_DIR)/drivers/remoteproc/qcom_sysmon.ko \
-         $(LINUX_DIR)/drivers/rpmsg/qcom_glink.ko \
-         $(LINUX_DIR)/drivers/rpmsg/qcom_glink_smem.ko \
-         $(LINUX_DIR)/drivers/misc/fastrpc.ko \
-         $(LINUX_DIR)/net/qrtr/qrtr.ko \
-         $(LINUX_DIR)/net/qrtr/qrtr-smd.ko \
-         $(LINUX_DIR)/net/qrtr/qrtr-tun.ko
-  AUTOLOAD:=$(call AutoLoad,20,qcom_common qcom_pil_info qcom_sysmon mdt_loader qcom_memshare qrtr ns qrtr-smd qrtr-tun fastrpc qcom_glink qcom_glink_smem qmi_helpers)
-  ifneq ($(wildcard $(LINUX_DIR)/drivers/soc/qcom/pdr_interface.ko),)
-         FILES += $(LINUX_DIR)/drivers/soc/qcom/pdr_interface.ko
-         AUTOLOAD += $(call AutoLoad,20,pdr_interface)
-  endif
+define KernelPackage/rpmsg-wwan-ctrl/description
+ Driver for RPMSG WWAN Control
+ This exposes all modem control ports like AT, QMI that use RPMSG
 endef
 
-$(eval $(call KernelPackage,qcom-remoteproc))
+$(eval $(call KernelPackage,rpmsg-wwan-ctrl))
 
+define KernelPackage/bam-demux
+  SUBMENU:=$(NETWORK_DEVICES_MENU)
+  TITLE:=Qualcomm BAM-DMUX WWAN network driver
+  DEPENDS:=@TARGET_msm89xx +kmod-wwan
+  KCONFIG:=CONFIG_QCOM_BAM_DMUX
+  FILES:=$(LINUX_DIR)/drivers/net/wwan/qcom_bam_dmux.ko
+  AUTOLOAD:=$(call AutoProbe,qcom_bam_dmux)
+endef
+
+define KernelPackage/bam-demux/description
+  Kernel modules for Qualcomm BAM-DMUX WWAN interface
+endef
+
+$(eval $(call KernelPackage,bam-demux))
 
 define KernelPackage/qcom-modem
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Qualcomm modem subsystem support
-  DEPENDS:=@TARGET_msm89xx +kmod-qcom-remoteproc +qrtr-ns +rpmsgexport +rmtfs
+  DEPENDS:=@TARGET_msm89xx +kmod-qcom-rproc +qrtr +rpmsgexport +rmtfs +kmod-bam-demux
   KCONFIG:= \
          CONFIG_RMNET \
          CONFIG_WWAN \
-         CONFIG_QCOM_BAM_DMUX \
          CONFIG_QCOM_Q6V5_COMMON \
          CONFIG_QCOM_Q6V5_MSS \
          CONFIG_QCOM_Q6V5_ADSP=n \
@@ -134,10 +106,9 @@ define KernelPackage/qcom-modem
          CONFIG_QCOM_IPA=n
   FILES:= \
          $(LINUX_DIR)/drivers/net/ethernet/qualcomm/rmnet/rmnet.ko \
-         $(LINUX_DIR)/drivers/net/wwan/qcom_bam_dmux.ko \
          $(LINUX_DIR)/drivers/remoteproc/qcom_q6v5.ko \
          $(LINUX_DIR)/drivers/remoteproc/qcom_q6v5_mss.ko
-  AUTOLOAD:=$(call AutoLoad,50,rmnet bam-dmux qcom_q6v5 qcom_q6v5_mss)
+  AUTOLOAD:=$(call AutoLoad,50,rmnet qcom_q6v5 qcom_q6v5_mss)
 endef
 
 $(eval $(call KernelPackage,qcom-modem))
@@ -148,7 +119,7 @@ $(eval $(call KernelPackage,qcom-modem))
 #
 define KernelPackage/sound-qcom-msm8916
   TITLE:=Qualcomm msm8916 built-in SoC sound support
-  DEPENDS:=@TARGET_msm89xx +kmod-sound-soc-core +kmod-qcom-remoteproc
+  DEPENDS:=@TARGET_msm89xx +kmod-sound-soc-core +kmod-qcom-rproc
   KCONFIG:= \
          CONFIG_SND_SOC_QCOM \
          CONFIG_SND_SOC_STORM=n \
@@ -198,7 +169,7 @@ $(eval $(call KernelPackage,sound-qcom-msm8916))
 define KernelPackage/qcom-drm
     SUBMENU:=$(VIDEO_MENU)
     TITLE:=DRM & GPU Support for Qualcomm Socs
-    DEPENDS:=@TARGET_msm89xx +kmod-backlight +adreno-3xx-firmware +kmod-backlight-pwm +kmod-drm +kmod-drm-ttm +kmod-drm-kms-helper +kmod-lib-crc-ccitt +kmod-qcom-remoteproc
+    DEPENDS:=@TARGET_msm89xx +kmod-backlight +adreno-3xx-firmware +kmod-backlight-pwm +kmod-drm +kmod-drm-ttm +kmod-drm-kms-helper +kmod-lib-crc-ccitt +kmod-qcom-rproc
     KCONFIG:= \
          CONFIG_DRM_PANEL=y \
          CONFIG_DRM_MSM \
@@ -288,3 +259,66 @@ define KernelPackage/qcom-msm8916-panel/description
 endef
 
 $(eval $(call KernelPackage,qcom-msm8916-panel))
+
+#
+#
+#
+# TravMurav openwrt msm89xx
+define KernelPackage/qcom-rproc
+  SUBMENU:=$(OTHER_MENU)
+  TITLE:=Qualcomm remoteproc support
+  DEPENDS:=@TARGET_msm89xx
+  KCONFIG:=\
+    CONFIG_QCOM_MDT_LOADER \
+    CONFIG_QCOM_RPROC_COMMON \
+    CONFIG_QCOM_PIL_INFO
+  FILES:=\
+    $(LINUX_DIR)/drivers/soc/qcom/mdt_loader.ko \
+    $(LINUX_DIR)/drivers/remoteproc/qcom_common.ko \
+    $(LINUX_DIR)/drivers/remoteproc/qcom_pil_info.ko
+  AUTOLOAD:=$(call AutoProbe,mdt_loader qcom_common qcom_pil_info)
+endef
+
+define KernelPackage/qcom-rproc/description
+Support for loading remoteprocs in some Qualcomm chipsets
+endef
+
+$(eval $(call KernelPackage,qcom-rproc))
+
+define KernelPackage/qcom-rproc-wcnss
+  SUBMENU:=$(OTHER_MENU)
+  TITLE:=Qualcomm WCNSS remoteproc support
+  DEPENDS:=@TARGET_msm89xx +kmod-qcom-rproc
+  KCONFIG:=\
+    CONFIG_QCOM_WCNSS_PIL \
+    CONFIG_QCOM_WCNSS_CTRL
+  FILES:=\
+    $(LINUX_DIR)/drivers/remoteproc/qcom_wcnss_pil.ko \
+    $(LINUX_DIR)/drivers/soc/qcom/wcnss_ctrl.ko
+  AUTOLOAD:=$(call AutoProbe,qcom_wcnss_pil wcnss_ctrl)
+endef
+
+define KernelPackage/qcom-rproc-wcnss/description
+Firmware loading and control for the WCNSS remoteproc
+endef
+
+$(eval $(call KernelPackage,qcom-rproc-wcnss))
+
+define KernelPackage/qcom-rproc-modem
+  SUBMENU:=$(OTHER_MENU)
+  TITLE:=Qualcomm modem remoteproc support
+  DEPENDS:=@TARGET_msm89xx +kmod-qcom-rproc
+  KCONFIG:=\
+    CONFIG_QCOM_Q6V5_COMMON \
+    CONFIG_QCOM_Q6V5_MSS
+  FILES:=\
+    $(LINUX_DIR)/drivers/remoteproc/qcom_q6v5.ko \
+    $(LINUX_DIR)/drivers/remoteproc/qcom_q6v5_mss.ko
+  AUTOLOAD:=$(call AutoProbe,qcom_q6v5 qcom_q6v5_mss)
+endef
+
+define KernelPackage/qcom-rproc-modem/description
+Firmware loading and control for the modem remoteproc.
+endef
+
+$(eval $(call KernelPackage,qcom-rproc-modem))

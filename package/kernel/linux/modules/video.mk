@@ -515,7 +515,7 @@ define KernelPackage/video-core
 	CONFIG_VIDEO_DEV \
 	CONFIG_V4L_PLATFORM_DRIVERS=y \
 	CONFIG_MEDIA_PLATFORM_DRIVERS=y
-  FILES:= $(LINUX_DIR)/drivers/media/mc/mc.ko \
+  FILES:= \
 	$(LINUX_DIR)/drivers/media/$(V4L2_DIR)/videodev.ko
   AUTOLOAD:=$(call AutoLoad,60,videodev)
 endef
@@ -550,16 +550,12 @@ define KernelPackage/video-videobuf2
 	CONFIG_VIDEOBUF2_CORE \
 	CONFIG_VIDEOBUF2_MEMOPS \
 	CONFIG_VIDEOBUF2_V4L2 \
-	CONFIG_VIDEOBUF2_VMALLOC
+	CONFIG_VIDEOBUF2_VMALLOC=y
   FILES:= \
 	$(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-common.ko \
 	$(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-v4l2.ko \
 	$(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-memops.ko \
 	$(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-vmalloc.ko
-ifneq ($(wildcard $(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-dma-sg.ko),)
-  FILES+=$(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-dma-sg.ko
-  AUTOLOAD+=$(call AutoLoad,65,videobuf2-dma-sg)
-endif
   AUTOLOAD:=$(call AutoLoad,65,videobuf2-core videobuf-v4l2 videobuf2-memops videobuf2-vmalloc)
   $(call AddDepends/video)
 endef
@@ -570,21 +566,6 @@ endef
 
 $(eval $(call KernelPackage,video-videobuf2))
 
-define KernelPackage/video-videobuf2-dma-contig
-  TITLE:=videobuf2 dma contig 
-  DEPENDS:=+kmod-dma-buf +kmod-video-videobuf2
-  KCONFIG:= CONFIG_VIDEOBUF2_DMA_CONTIG
-  FILES:= $(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-dma-contig.ko
-  AUTOLOAD:=$(call AutoLoad,65,videobuf2-dma-contig)
-  HIDDEN:=1
-  $(call AddDepends/video)
-endef
-
-define KernelPackage/video-videobuf2-dma-contig/description
- Some stuff depends on this,but this cannot generate without those stuff.
-endef
-
-$(eval $(call KernelPackage,video-videobuf2-dma-contig))
 
 define KernelPackage/video-cpia2
   TITLE:=CPIA2 video driver
@@ -635,6 +616,7 @@ define KernelPackage/video-uvc/description
 endef
 
 $(eval $(call KernelPackage,video-uvc))
+
 
 define KernelPackage/video-gspca-core
   MENU:=1
@@ -1241,6 +1223,22 @@ define KernelPackage/video-dma-sg/description
 endef
 
 $(eval $(call KernelPackage,video-dma-sg))
+
+define KernelPackage/video-videobuf2-dma-contig
+  TITLE:=videobuf2 dma contig 
+  DEPENDS:=+kmod-dma-buf +kmod-video-videobuf2
+  KCONFIG:= CONFIG_VIDEOBUF2_DMA_CONTIG
+  FILES:= $(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-dma-contig.ko
+  AUTOLOAD:=$(call AutoLoad,65,videobuf2-dma-contig)
+  HIDDEN:=1
+  $(call AddDepends/video)
+endef
+
+define KernelPackage/video-videobuf2-dma-contig/description
+ Some stuff depends on this,but this cannot generate without those stuff.
+endef
+
+$(eval $(call KernelPackage,video-videobuf2-dma-contig))
 
 define KernelPackage/video-coda
   TITLE:=i.MX VPU support
