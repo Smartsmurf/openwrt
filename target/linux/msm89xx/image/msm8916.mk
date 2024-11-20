@@ -8,6 +8,7 @@ ifeq ($(SUBTARGET),msm8916)
 define Device/msm8916
   $(Device/Qcom)
   SOC := msm8916
+  ROOT_BLKDEV := "/dev/mmcblk0p14"
   QCOM_CMDLINE := "earlycon console=tty0 console=ttyMSM0,115200 root=/dev/mmcblk0p14 rw rootwait"
   QCOM_BOOTIMG_FLASH_OFFSET_BASE := 0x80000000
   QCOM_BOOTIMG_FLASH_OFFSET_KERNEL := 0x00080000
@@ -17,68 +18,42 @@ define Device/msm8916
   QCOM_BOOTIMG_FLASH_OFFSET_PAGESIZE := 2048
 endef
 
-define Device/XiaoMi_wingtech-wt88047-modem
-  $(Device/msm8916)
-  DEVICE_VENDOR := XiaoMi
-  DEVICE_MODEL := Redmi 2
-  DEVICE_PACKAGES := kmod-qcom-drm kmod-qcom-msm8916-panel kmod-sound-qcom-msm8916 kmod-qcom-modem qcom-msm8916-wt8x047-wcnss-firmware qcom-msm8916-wcnss-wt88047-nv qcom-msm8916-modem-wt88047-firmware 
-endef
+#define Device/XiaoMi_wingtech-wt88047-modem
+#  $(Device/msm8916)
+#  DEVICE_VENDOR := XiaoMi
+#  DEVICE_MODEL := Redmi 2
+#  DEVICE_PACKAGES := kmod-qcom-drm kmod-qcom-msm8916-panel kmod-sound-qcom-msm8916 kmod-qcom-modem qcom-msm8916-wt8x047-wcnss-firmware qcom-msm8916-wcnss-wt88047-nv qcom-msm8916-modem-wt88047-firmware 
+#endef
 
-TARGET_DEVICES += XiaoMi_wingtech-wt88047-modem
+#TARGET_DEVICES += XiaoMi_wingtech-wt88047-modem
 
-define Device/Handsome_handsome-openstick-ufi001b
-  $(Device/msm8916)
-  DEVICE_VENDOR := Handsome
-  DEVICE_MODEL := OpenStick UFI001B
-  DEVICE_PACKAGES := openstick-tweaks wpad-basic-wolfssl kmod-qcom-modem qcom-msm8916-modem-openstick-ufi001b-firmware qcom-msm8916-openstick-ufi001b-wcnss-firmware qcom-msm8916-wcnss-openstick-ufi001b-nv
-endef
+#define Device/openstick_uz801
+#  $(Device/msm8916)
+#  DEVICE_VENDOR := Openstick
+#  DEVICE_MODEL := OpenStick UZ801
+#  DEVICE_PACKAGES := openstick-tweaks wpad-basic-wolfssl kmod-qcom-modem qcom-msm8916-modem-openstick-uz801-firmware qcom-msm8916-openstick-uz801-wcnss-firmware qcom-msm8916-wcnss-openstick-uz801-nv
+#endef
 
-TARGET_DEVICES += Handsome_handsome-openstick-ufi001b
+# TARGET_DEVICES += openstick_uz801
 
-define Device/Handsome_handsome-openstick-ufi001c
-  $(Device/msm8916)
-  DEVICE_VENDOR := Handsome
-  DEVICE_MODEL := OpenStick UFI001C
-  DEVICE_PACKAGES := openstick-tweaks wpad-basic-wolfssl kmod-qcom-modem qcom-msm8916-modem-openstick-ufi001c-firmware qcom-msm8916-openstick-ufi001c-wcnss-firmware qcom-msm8916-wcnss-openstick-ufi001c-nv
-endef
-
-TARGET_DEVICES += Handsome_handsome-openstick-ufi001c
-
-define Device/Handsome_handsome-openstick-sp970
-  $(Device/msm8916)
-  DEVICE_VENDOR := Handsome
-  DEVICE_MODEL := OpenStick SP970
-  DEVICE_PACKAGES := openstick-tweaks wpad-basic-wolfssl kmod-qcom-modem qcom-msm8916-modem-openstick-sp970-firmware qcom-msm8916-openstick-sp970-wcnss-firmware qcom-msm8916-wcnss-openstick-sp970-nv
-endef
-
-TARGET_DEVICES += Handsome_handsome-openstick-sp970
-
-define Device/openstick_uz801
-  $(Device/msm8916)
-  DEVICE_VENDOR := Openstick
-  DEVICE_MODEL := OpenStick UZ801
-  DEVICE_PACKAGES := openstick-tweaks wpad-basic-wolfssl kmod-qcom-modem qcom-msm8916-modem-openstick-uz801-firmware qcom-msm8916-openstick-uz801-wcnss-firmware qcom-msm8916-wcnss-openstick-uz801-nv
-endef
-
-TARGET_DEVICES += openstick_uz801
-
-define Device/openstick_uz801-v32
+define Device/msm8916-uz801-v32
   $(Device/msm8916)
   DEVICE_VENDOR := Openstick
   DEVICE_MODEL := OpenStick UZ801 V3.2
-  DEVICE_PACKAGES := openstick-tweaks wpad-basic-wolfssl kmod-qcom-modem qcom-msm8916-modem-openstick-uz801-v3_2-firmware \
-  qcom-msm8916-openstick-uz801-v3_2-wcnss-firmware qcom-msm8916-wcnss-openstick-uz801-v3_2-nv
+  DEVICE_PACKAGES := openstick-tweaks wpad-basic-wolfssl kmod-qcom-rproc-modem \
+  qcom-msm8916-modem-openstick-uz801-v3_2-firmware qcom-msm8916-openstick-uz801-v3_2-wcnss-firmware \
+  qcom-msm8916-wcnss-openstick-uz801-v3_2-nv
+  SUPPORTED_DEVICES += yiming,uz801-v3
 endef
+TARGET_DEVICES += msm8916-uz801-v32
 
-TARGET_DEVICES += openstick_uz801-v32
+#define Device/openstick_uf896
+#  $(Device/msm8916)
+#  DEVICE_VENDOR := Openstick
+#  DEVICE_MODEL := UF896
+#  DEVICE_PACKAGES := openstick-tweaks wpad-basic-wolfssl kmod-qcom-modem qcom-msm8916-modem-uf896-firmware qcom-msm8916-uf896-wcnss-firmware qcom-msm8916-wcnss-uf896-nv losetup
+#endef
 
-define Device/openstick_uf896
-  $(Device/msm8916)
-  DEVICE_VENDOR := Openstick
-  DEVICE_MODEL := UF896
-  DEVICE_PACKAGES := openstick-tweaks wpad-basic-wolfssl kmod-qcom-modem qcom-msm8916-modem-uf896-firmware qcom-msm8916-uf896-wcnss-firmware qcom-msm8916-wcnss-uf896-nv losetup
-endef
-
-TARGET_DEVICES += openstick_uf896
+# TARGET_DEVICES += openstick_uf896
 
 endif
